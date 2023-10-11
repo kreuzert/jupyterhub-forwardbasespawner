@@ -1,5 +1,3 @@
-from jupyterhub.spawner import Spawner
-
 import asyncio
 import copy
 import inspect
@@ -9,19 +7,19 @@ import string
 import subprocess
 import time
 import traceback
+from datetime import datetime
 from functools import lru_cache
 from urllib.parse import urlparse
 
-from async_generator import aclosing
 import escapism
+from async_generator import aclosing
 from jupyterhub.spawner import Spawner
 from jupyterhub.utils import maybe_future
-from jupyterhub.utils import url_path_join
 from jupyterhub.utils import random_port
+from jupyterhub.utils import url_path_join
 from kubernetes import client
 from kubernetes import config
 from tornado import web
-from datetime import datetime
 from traitlets import Any
 from traitlets import Bool
 from traitlets import Callable
@@ -48,15 +46,15 @@ class ForwardBaseSpawner(Spawner):
     """
     This class contains all configurables to create a
     port forwarding process to a remotely started JupyterHub.
-    
+
     It is meant to be used within a Kubernetes Cluster
     with the python kubernetes API.
     """
-    
+
     # Remote jupyterhub-singleuser servers might require a ssh port forward
     # to be reachable by jupyterhub. This dict will contain this information
     # ssh -i <key> -L <local_host>:<local_port>:<remote_host>:<remote_port> <user>@<node>
-    # 
+    #
     # Subclasses' _start() function should return this
     port_forward_info = {}
     port_forwarded = 0
@@ -78,7 +76,6 @@ class ForwardBaseSpawner(Spawner):
     latest_events = []
     events = {}
     yield_wait_seconds = 1
-
 
     extra_labels = Union(
         [Dict(default_value={}), Callable()],
@@ -102,7 +99,6 @@ class ForwardBaseSpawner(Spawner):
             c.OutpostSpawner.extra_labels = extra_labels
         """,
     ).tag(config=True)
-
 
     ssh_recreate_at_start = Union(
         [Callable(), Bool()],
@@ -163,7 +159,7 @@ class ForwardBaseSpawner(Spawner):
 
         """,
     ).tag(config=True)
-    
+
     ssh_remote_key = Union(
         [Callable(), Unicode()],
         allow_none=True,
@@ -206,7 +202,7 @@ class ForwardBaseSpawner(Spawner):
 
         """,
     ).tag(config=True)
-    
+
     ssh_remote_username = Union(
         [Callable(), Unicode()],
         default_value="jupyterhuboutpost",
@@ -250,7 +246,7 @@ class ForwardBaseSpawner(Spawner):
 
         """,
     ).tag(config=True)
-    
+
     ssh_remote_node = Union(
         [Callable(), Unicode()],
         allow_none=True,
@@ -295,7 +291,7 @@ class ForwardBaseSpawner(Spawner):
 
         """,
     ).tag(config=True)
-    
+
     ssh_port_remote = Union(
         [Callable(), Integer(), Unicode()],
         default_value=22,
@@ -340,12 +336,14 @@ class ForwardBaseSpawner(Spawner):
         this feature. 
         
         Must be a boolean or a callable function
-        """
+        """,
     ).tag(config=True)
 
     async def get_ssh_create_remote_forward(self):
         if callable(self.ssh_create_remote_forward):
-            ssh_create_remote_forward = self.ssh_create_remote_forward(self, self.port_forward_info.get("remote", {}))
+            ssh_create_remote_forward = self.ssh_create_remote_forward(
+                self, self.port_forward_info.get("remote", {})
+            )
             if inspect.isawaitable(ssh_create_remote_forward):
                 ssh_create_remote_forward = await ssh_create_remote_forward
         else:
@@ -463,18 +461,16 @@ class ForwardBaseSpawner(Spawner):
         
         """,
     ).tag(config=True)
-    
-    async def get_ssh_forward_options(self):    
+
+    async def get_ssh_forward_options(self):
         if callable(self.ssh_forward_options):
-            ssh_forward_options = self.ssh_forward_options(
-                self, self.port_forward_info
-            )
+            ssh_forward_options = self.ssh_forward_options(self, self.port_forward_info)
             if inspect.isawaitable(ssh_forward_options):
                 ssh_forward_options = await ssh_forward_options
         else:
             ssh_forward_options = self.ssh_forward_options
         return ssh_forward_options
-    
+
     ssh_forward_remote_options = Union(
         [Dict(default_value={}), Callable()],
         help="""
@@ -496,8 +492,8 @@ class ForwardBaseSpawner(Spawner):
         
         """,
     ).tag(config=True)
-    
-    async def get_ssh_forward_remote_options(self):    
+
+    async def get_ssh_forward_remote_options(self):
         if callable(self.ssh_forward_remote_options):
             ssh_forward_remote_options = self.ssh_forward_remote_options(
                 self, self.port_forward_info.get("remote", {})
@@ -527,7 +523,6 @@ class ForwardBaseSpawner(Spawner):
             except Exception:
                 self.log.exception("post_stop_hook failed with exception: %s", self)
 
-
     def get_env(self):
         """Get customized environment variables
 
@@ -545,12 +540,16 @@ class ForwardBaseSpawner(Spawner):
         url_parts = ["users", "setuptunnel", self.user.escaped_name]
         if self.name:
             url_parts.append(self.name)
-        env["JUPYTERHUB_SETUPTUNNEL_URL"] = f"{env['JUPYTERHUB_API_URL']}/{url_path_join(*url_parts)}"
-        
+        env[
+            "JUPYTERHUB_SETUPTUNNEL_URL"
+        ] = f"{env['JUPYTERHUB_API_URL']}/{url_path_join(*url_parts)}"
+
         url_parts = ["users", "progress", "events", self.user.escaped_name]
         if self.name:
             url_parts.append(self.name)
-        env["JUPYTERHUB_EVENTS_URL"] = f"{env['JUPYTERHUB_API_URL']}/{url_path_join(*url_parts)}"
+        env[
+            "JUPYTERHUB_EVENTS_URL"
+        ] = f"{env['JUPYTERHUB_API_URL']}/{url_path_join(*url_parts)}"
 
         if self.internal_ssl:
             proto = "https://"
@@ -729,7 +728,6 @@ class ForwardBaseSpawner(Spawner):
             stop_event = self.stop_event
         return stop_event
 
-
     def _get_event_time(self, event):
         # Regex for date time
         pattern = re.compile(
@@ -770,9 +768,13 @@ class ForwardBaseSpawner(Spawner):
           ssh_port (int): Used in ssh forward command. Default is 22
         """
         if callable(self.ssh_remote_port):
-            ssh_remote_port = await maybe_future(self.ssh_remote_port(self, self.port_forward_info.get("remote", {})))
+            ssh_remote_port = await maybe_future(
+                self.ssh_remote_port(self, self.port_forward_info.get("remote", {}))
+            )
         else:
-            ssh_remote_port = self.port_forward_info.get("remote", {}).get("ssh_port", self.ssh_remote_port)
+            ssh_remote_port = self.port_forward_info.get("remote", {}).get(
+                "ssh_port", self.ssh_remote_port
+            )
         return ssh_remote_port
 
     async def get_ssh_username(self):
@@ -788,7 +790,7 @@ class ForwardBaseSpawner(Spawner):
         else:
             ssh_user = self.port_forward_info.get("ssh_username", self.ssh_username)
         return ssh_user
-    
+
     async def get_ssh_remote_username(self):
         """Get ssh username
 
@@ -800,7 +802,9 @@ class ForwardBaseSpawner(Spawner):
                 self.ssh_remote_username(self, self.port_forward_info.get("remote", {}))
             )
         else:
-            ssh_remote_username = self.port_forward_info.get("remote", {}).get("ssh_username", self.ssh_remote_username)
+            ssh_remote_username = self.port_forward_info.get("remote", {}).get(
+                "ssh_username", self.ssh_remote_username
+            )
         return ssh_remote_username
 
     async def get_ssh_key(self):
@@ -813,16 +817,21 @@ class ForwardBaseSpawner(Spawner):
         else:
             ssh_key = self.port_forward_info.get("ssh_key", self.ssh_key)
         return ssh_key
-    
+
     async def get_ssh_remote_key(self):
         """Get ssh remote key
 
         Returns:
-          ssh_remote_key (string): Path to ssh privatekey used in ssh forward remote command"""
+          ssh_remote_key (string): Path to ssh privatekey used in ssh forward remote command
+        """
         if callable(self.ssh_remote_key):
-            ssh_remote_key = await maybe_future(self.ssh_remote_key(self, self.port_forward_info.get("remote", {})))
+            ssh_remote_key = await maybe_future(
+                self.ssh_remote_key(self, self.port_forward_info.get("remote", {}))
+            )
         else:
-            ssh_remote_key = self.port_forward_info.get("remote", {}).get("ssh_key", self.ssh_remote_key)
+            ssh_remote_key = self.port_forward_info.get("remote", {}).get(
+                "ssh_key", self.ssh_remote_key
+            )
         return ssh_remote_key
 
     def get_ssh_during_startup(self):
@@ -851,7 +860,7 @@ class ForwardBaseSpawner(Spawner):
         else:
             ssh_node = self.port_forward_info.get("ssh_node", self.ssh_node)
         return ssh_node
-    
+
     async def get_ssh_remote_node(self):
         """Get ssh node
 
@@ -860,9 +869,13 @@ class ForwardBaseSpawner(Spawner):
         """
 
         if callable(self.ssh_remote_node):
-            ssh_remote_node = await maybe_future(self.ssh_node(self, self.port_forward_info.get("remote", {})))
+            ssh_remote_node = await maybe_future(
+                self.ssh_node(self, self.port_forward_info.get("remote", {}))
+            )
         else:
-            ssh_remote_node = self.port_forward_info.get("remote", {}).get("ssh_node", self.ssh_remote_node)
+            ssh_remote_node = self.port_forward_info.get("remote", {}).get(
+                "ssh_node", self.ssh_remote_node
+            )
         return ssh_remote_node
 
     async def run_ssh_forward(self, create_svc=True):
@@ -880,13 +893,11 @@ class ForwardBaseSpawner(Spawner):
                 log_message=f"Cannot start ssh tunnel for {self.name}: {str(e)}",
                 reason=traceback.format_exc(),
             )
-        
+
         if create_svc:
             try:
                 if self.ssh_custom_svc:
-                    ssh_custom_svc = self.ssh_custom_svc(
-                        self, self.port_forward_info
-                    )
+                    ssh_custom_svc = self.ssh_custom_svc(self, self.port_forward_info)
                     if inspect.isawaitable(ssh_custom_svc):
                         ssh_custom_svc = await ssh_custom_svc
                     return ssh_custom_svc
@@ -922,7 +933,7 @@ class ForwardBaseSpawner(Spawner):
             "ControlPath": f"/tmp/control_{ssh_address_or_host}",
             "IdentityFile": ssh_pkey,
         }
-        
+
         custom_forward_options = await self.get_ssh_forward_options()
         ssh_forward_options_all.update(custom_forward_options)
         ssh_forward_options_all.update(
@@ -958,7 +969,7 @@ class ForwardBaseSpawner(Spawner):
             "ControlPath": f"/tmp/control_remote_{ssh_address_or_host}",
             "IdentityFile": ssh_pkey,
         }
-        
+
         custom_forward_remote_options = await self.get_ssh_forward_remote_options()
         ssh_forward_options_all.update(custom_forward_remote_options)
         ssh_forward_options_all.update(
@@ -1090,12 +1101,7 @@ class ForwardBaseSpawner(Spawner):
         )
         user, node, cmd = await self.get_forward_remote_cmd()
         stop_cmd = cmd.copy()
-        stop_cmd.extend(
-            [
-                f"{user}@{node}",
-                "stop"
-            ]
-        )
+        stop_cmd.extend([f"{user}@{node}", "stop"])
         self.subprocess_cmd(stop_cmd)
 
     async def ssh_default_forward_remote(self):
@@ -1151,19 +1157,19 @@ class ForwardBaseSpawner(Spawner):
         Returns:
           (string, int): (self.svc_name, self.port)
         """
-        
+
         v1 = self._k8s_get_client_core()
-        
+
         hub_svc = v1.read_namespaced_service(
             name=get_name("hub"), namespace=os.environ.get("POD_NAMESPACE")
         )
         hub_selector = hub_svc.to_dict()["spec"]["selector"]
-        
+
         labels = hub_selector.copy()
         labels["component"] = "singleuser-server"
         extra_labels = await self.get_extra_labels()
         labels.update(extra_labels)
-        
+
         service_manifest = {
             "apiVersion": "v1",
             "kind": "Service",
@@ -1357,18 +1363,20 @@ class ForwardBaseSpawner(Spawner):
     def start(self):
         # Wrapper around self._start
         # Can be used to cancel start progress while waiting for it's response
-        
+
         self.call_during_startup = False
-        
+
         async def call_subclass_start(self):
             if self.port == 0:
                 self.port = random_port()
-            
+
             create_ssh_remote_forward = await self.get_ssh_create_remote_forward()
             if create_ssh_remote_forward:
                 try:
                     if self.ssh_custom_forward_remote:
-                        port_forward_remote = self.ssh_custom_forward_remote(self, self.ssh_custom_forward_remote)
+                        port_forward_remote = self.ssh_custom_forward_remote(
+                            self, self.ssh_custom_forward_remote
+                        )
                         if inspect.isawaitable(port_forward_remote):
                             await port_forward_remote
                     else:
@@ -1376,15 +1384,17 @@ class ForwardBaseSpawner(Spawner):
                 except Exception as e:
                     raise web.HTTPError(
                         419,
-                        log_message=f"Cannot start remote ssh tunnel for {self._log_name}: {str(e)}"
+                        log_message=f"Cannot start remote ssh tunnel for {self._log_name}: {str(e)}",
                     )
-            
+
             self._start_future = asyncio.ensure_future(self._start())
             try:
                 resp = await self._start_future
             except Exception as e:
                 status_code = getattr(e, "status_code", 500)
-                reason = getattr(e, "reason", traceback.format_exc()).replace("\n", "<br>")
+                reason = getattr(e, "reason", traceback.format_exc()).replace(
+                    "\n", "<br>"
+                )
                 log_message = getattr(e, "log_message", "")
                 now = datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
                 self.stop_event = {
@@ -1403,7 +1413,7 @@ class ForwardBaseSpawner(Spawner):
                     await asyncio.sleep(2 * self.yield_wait_seconds)
                 raise e
             resp_json = {"service": resp}
-            
+
             """
             There are 3 possible scenarios for remote singleuser servers:
             1. Reachable by JupyterHub (e.g. outpost service running on same cluster)
@@ -1439,22 +1449,22 @@ class ForwardBaseSpawner(Spawner):
 
             # Port may have changed in port forwarding or by remote outpost service.
             self.port = int(port)
-            self.log.info(f"Expect JupyterLab at {ret}")            
+            self.log.info(f"Expect JupyterLab at {ret}")
             return ret
 
-        self._start_future_response = asyncio.ensure_future(call_subclass_start(self))        
+        self._start_future_response = asyncio.ensure_future(call_subclass_start(self))
         return self._start_future_response
 
     async def _start(self):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
-    
+
     async def poll(self):
         status = await self._poll()
-        
+
         if self.call_during_startup:
             self.call_during_startup = False
             ssh_recreate_at_start = await self.get_ssh_recreate_at_start()
-            
+
             if status != None:
                 await self.stop(cancel=True)
                 await self.run_post_stop_hook()
@@ -1462,21 +1472,22 @@ class ForwardBaseSpawner(Spawner):
                 try:
                     await self.run_ssh_forward(create_svc=False)
                 except:
-                    self.log.exception("Could not recreate ssh tunnel during startup. Stop server")
+                    self.log.exception(
+                        "Could not recreate ssh tunnel during startup. Stop server"
+                    )
                     self.call_during_startup = False
                     await self.stop(cancel=True)
                     await self.run_post_stop_hook()
-                    return 0        
-    
+                    return 0
+
         return status
-        
-    
+
     async def _poll(self):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
-    
+
     async def _stop(self):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
-    
+
     async def stop(self, now=False, cancel=False, event=None, **kwargs):
         if self.already_stopped:
             # We've already sent a request to the outpost.
@@ -1485,19 +1496,19 @@ class ForwardBaseSpawner(Spawner):
 
         # Prevent multiple requests to the outpost
         self.already_stopped = True
-        
+
         if cancel:
             # If self._start is still running we cancel it here
             await self.cancel_start_function()
-        
+
         try:
             await self._stop(now=now, **kwargs)
         finally:
             if event:
                 if callable(event):
                     event = await maybe_future(event)
-                self.latest_events.append(event)                
-        
+                self.latest_events.append(event)
+
         # We've implemented a cancel feature, which allows us to call
         # Spawner.stop(cancel=True) and stop the spawn process.
         # Used by api_setup_tunnel.py.
@@ -1506,7 +1517,6 @@ class ForwardBaseSpawner(Spawner):
 
         if self.port_forward_info:
             await self.run_ssh_forward_remove()
-
 
     async def cancel_start_function(self):
         # cancel self._start, if it's running
