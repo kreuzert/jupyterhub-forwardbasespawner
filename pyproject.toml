@@ -43,7 +43,7 @@ profile = "black"
 github_url = "https://github.com/kreuzert/jupyterhub-forwardbasespawner"
 
 [tool.tbump.version]
-current = "0.0.2.dev15"
+current = "0.0.2.dev16"
 regex = '''
   (?P<major>\d+)
   \.
