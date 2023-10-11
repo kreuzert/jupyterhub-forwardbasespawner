@@ -292,7 +292,7 @@ class ForwardBaseSpawner(Spawner):
         """,
     ).tag(config=True)
 
-    ssh_port_remote = Union(
+    ssh_remote_port = Union(
         [Callable(), Integer(), Unicode()],
         default_value=22,
         help="""
