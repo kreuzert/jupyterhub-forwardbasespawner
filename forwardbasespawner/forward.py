@@ -164,24 +164,24 @@ class ForwardBaseSpawner(Spawner):
         """,
     ).tag(config=True)
     
-    ssh_key = Union(
+    ssh_remote_key = Union(
         [Callable(), Unicode()],
         allow_none=True,
-        default_value="/home/jovyan/.ssh/id_rsa",
+        default_value="/home/jovyan/.ssh/id_rsa_remote",
         help="""
         An optional hook function, or string, that you can implement to
-        set the ssh privatekey used for ssh port forwarding.
+        set the ssh privatekey used for ssh port forwarding remote.
 
         This maybe a coroutine.
 
         Example::
 
-            def ssh_key(spawner):
+            def ssh_remote_key(spawner):
                 if spawner.user_options.get("system", "") == "A":
                     return "/mnt/private_keys/a"
                 return "/mnt/private_keys/b"
 
-            c.OutpostSpawner.ssh_key = ssh_key
+            c.OutpostSpawner.ssh_remote_key = ssh_remote_key
 
         """,
     ).tag(config=True)
