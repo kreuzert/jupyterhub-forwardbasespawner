@@ -341,7 +341,7 @@ class ForwardBaseSpawner(Spawner):
         
         Must be a boolean or a callable function
         """
-    )
+    ).tag(config=True)
 
     async def get_ssh_create_remote_forward(self):
         if callable(self.ssh_create_remote_forward):
