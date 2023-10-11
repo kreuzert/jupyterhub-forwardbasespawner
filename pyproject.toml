@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 [project]
 name = "jupyterhub-forwardbasespawner"
 description = "JupyterHub BaseSpawner class. Enables remote single-user server."
-version = "0.0.1.dev1"
 readme = "README.md"
 requires-python = ">=3.9"
 licesse = {file = "LICENSE"}
