@@ -1448,9 +1448,16 @@ class ForwardBaseSpawner(Spawner):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
     
     async def poll(self):
+        status = await self._poll()
+        
         if self.call_during_startup:
+            self.call_during_startup = False
             ssh_recreate_at_start = await self.get_ssh_recreate_at_start()
-            if ssh_recreate_at_start:
+            
+            if status != None:
+                await self.stop(cancel=True)
+                await self.run_post_stop_hook()
+            elif ssh_recreate_at_start:
                 try:
                     await self.run_ssh_forward(create_svc=False)
                 except:
@@ -1458,15 +1465,7 @@ class ForwardBaseSpawner(Spawner):
                     self.call_during_startup = False
                     await self.stop(cancel=True)
                     await self.run_post_stop_hook()
-                    return 0
-        
-        status = await self._poll()
-        
-        if self.call_during_startup:
-            self.call_during_startup = False
-            if status != None:
-                await self.stop(cancel=True)
-                await self.run_post_stop_hook()
+                    return 0        
     
         return status
         
