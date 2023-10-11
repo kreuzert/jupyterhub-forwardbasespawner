@@ -946,7 +946,7 @@ class ForwardBaseSpawner(Spawner):
             cmd.append(f"-o{key}={value}")
         return ssh_username, ssh_address_or_host, cmd
 
-    async def get_forward_remote_cmd(self, extra_args=["-f", "-N", "-n"]):
+    async def get_forward_remote_cmd(self, extra_args=[]):
         """Get base options for ssh port forwarding
 
         Returns:
@@ -963,11 +963,11 @@ class ForwardBaseSpawner(Spawner):
         ssh_forward_options_all = {
             "ServerAliveInterval": "15",
             "StrictHostKeyChecking": "accept-new",
+            "Port": str(ssh_port),
+            "IdentityFile": ssh_pkey,
             "ControlMaster": "auto",
             "ControlPersist": "yes",
-            "Port": str(ssh_port),
             "ControlPath": f"/tmp/control_remote_{ssh_address_or_host}",
-            "IdentityFile": ssh_pkey,
         }
 
         custom_forward_remote_options = await self.get_ssh_forward_remote_options()
@@ -1137,7 +1137,7 @@ class ForwardBaseSpawner(Spawner):
 
         start_cmd = cmd.copy()
         start_cmd.extend([f"{user}@{node}", "start"])
-        returncode, out, err = self.subprocess_cmd(start_cmd, timeout=10)
+        returncode, out, err = self.subprocess_cmd(start_cmd, timeout=3)
         if returncode != 217:
             raise Exception(
                 f"Could not create remote forward port ({start_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
