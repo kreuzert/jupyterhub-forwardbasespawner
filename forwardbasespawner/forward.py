@@ -910,7 +910,7 @@ class ForwardBaseSpawner(Spawner):
                     reason=traceback.format_exc(),
                 )
 
-    async def get_forward_cmd(self, extra_args=[]):
+    async def get_forward_cmd(self, extra_args=["-f", "-N", "-n"]):
         """Get base options for ssh port forwarding
 
         Returns:
@@ -946,7 +946,7 @@ class ForwardBaseSpawner(Spawner):
             cmd.append(f"-o{key}={value}")
         return ssh_username, ssh_address_or_host, cmd
 
-    async def get_forward_remote_cmd(self):
+    async def get_forward_remote_cmd(self, extra_args=["-f", "-N", "-n"]):
         """Get base options for ssh port forwarding
 
         Returns:
@@ -978,6 +978,7 @@ class ForwardBaseSpawner(Spawner):
         )
 
         cmd = ["ssh"]
+        cmd.extend(extra_args)
         for key, value in ssh_forward_options_all.items():
             cmd.append(f"-o{key}={value}")
         return ssh_username, ssh_address_or_host, cmd
@@ -1102,7 +1103,7 @@ class ForwardBaseSpawner(Spawner):
         service_address, service_port = self.split_service_address(
             self.port_forward_info.get("service")
         )
-        user, node, cmd = await self.get_forward_remote_cmd()
+        user, node, cmd = await self.get_forward_remote_cmd(extra_args=["-f", "-n"])
         stop_cmd = cmd.copy()
         stop_cmd.extend([f"{user}@{node}", "stop"])
         self.subprocess_cmd(stop_cmd)
@@ -1138,6 +1139,7 @@ class ForwardBaseSpawner(Spawner):
                     f"Could not create remote ssh connection ({connect_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
                 )
 
+        user, node, cmd = await self.get_forward_remote_cmd(extra_args=["-f", "-n"])
         start_cmd = cmd.copy()
         start_cmd.extend([f"{user}@{node}", "start"])
         try:
