@@ -1135,6 +1135,7 @@ class ForwardBaseSpawner(Spawner):
                     f"Could not create remote ssh connection ({connect_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
                 )
 
+        start_cmd = cmd.copy()
         start_cmd.extend([f"{user}@{node}", "start"])
         returncode, out, err = self.subprocess_cmd(start_cmd)
         if returncode != 217:
