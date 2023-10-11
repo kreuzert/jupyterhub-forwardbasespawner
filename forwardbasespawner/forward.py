@@ -910,7 +910,7 @@ class ForwardBaseSpawner(Spawner):
                     reason=traceback.format_exc(),
                 )
 
-    async def get_forward_cmd(self, extra_args=["-f", "-N", "-n"]):
+    async def get_forward_cmd(self, extra_args=[]):
         """Get base options for ssh port forwarding
 
         Returns:
@@ -946,7 +946,7 @@ class ForwardBaseSpawner(Spawner):
             cmd.append(f"-o{key}={value}")
         return ssh_username, ssh_address_or_host, cmd
 
-    async def get_forward_remote_cmd(self, extra_args=[]):
+    async def get_forward_remote_cmd(self):
         """Get base options for ssh port forwarding
 
         Returns:
@@ -962,7 +962,8 @@ class ForwardBaseSpawner(Spawner):
 
         ssh_forward_options_all = {
             "ServerAliveInterval": "15",
-            "StrictHostKeyChecking": "accept-new",
+            "StrictHostKeyChecking": "no",
+            "UserKnownHostsFile": "/dev/null",
             "Port": str(ssh_port),
             "IdentityFile": ssh_pkey,
             "ControlMaster": "auto",
@@ -1002,6 +1003,9 @@ class ForwardBaseSpawner(Spawner):
         try:
             out, err = p.communicate(timeout=timeout)
         except subprocess.TimeoutExpired as e:
+            self.log.exception(
+                f"{self._log_name} - subprocess cmd timeout for {' '.join(cmd)}"
+            )
             p.kill()
             raise e
         return p.returncode, out, err
@@ -1138,12 +1142,12 @@ class ForwardBaseSpawner(Spawner):
         start_cmd = cmd.copy()
         start_cmd.extend([f"{user}@{node}", "start"])
         try:
-            returncode, out, err = self.subprocess_cmd(start_cmd, timeout=3)
+            returncode, out, err = self.subprocess_cmd(start_cmd, timeout=120)
         except subprocess.TimeoutExpired as e:
             self.log.info("Start cmd timeout. Check if it's running with status.")
             status_cmd = cmd.copy()
             status_cmd.extend([f"{user}@{node}", "status"])
-            returncode, out, err = self.subprocess_cmd(status_cmd, timeout=3)
+            returncode, out, err = self.subprocess_cmd(status_cmd, timeout=120)
         if returncode != 217:
             raise Exception(
                 f"Could not create remote forward port ({start_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
