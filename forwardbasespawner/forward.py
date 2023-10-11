@@ -978,7 +978,6 @@ class ForwardBaseSpawner(Spawner):
         )
 
         cmd = ["ssh"]
-        cmd.extend(extra_args)
         for key, value in ssh_forward_options_all.items():
             cmd.append(f"-o{key}={value}")
         return ssh_username, ssh_address_or_host, cmd
