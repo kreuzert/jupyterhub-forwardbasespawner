@@ -1467,7 +1467,8 @@ class ForwardBaseSpawner(Spawner):
 
             if status != None:
                 await self.stop(cancel=True)
-                await self.run_post_stop_hook()
+                self.run_post_stop_hook()
+                return status
             elif ssh_recreate_at_start:
                 try:
                     await self.run_ssh_forward(create_svc=False)
@@ -1477,7 +1478,7 @@ class ForwardBaseSpawner(Spawner):
                     )
                     self.call_during_startup = False
                     await self.stop(cancel=True)
-                    await self.run_post_stop_hook()
+                    self.run_post_stop_hook()
                     return 0
 
         return status
