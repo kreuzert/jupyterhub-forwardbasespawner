@@ -881,20 +881,6 @@ class ForwardBaseSpawner(Spawner):
                 reason=traceback.format_exc(),
             )
         
-        create_ssh_remote_forward = await self.get_ssh_create_remote_forward()
-        if create_ssh_remote_forward:
-            try:
-                if self.ssh_custom_forward_remote:
-                    port_forward_remote = self.ssh_custom_forward_remote(self, self.ssh_custom_forward_remote)
-                    if inspect.isawaitable(port_forward_remote):
-                        await port_forward_remote
-                else:
-                    await self.ssh_default_forward_remote()
-            except Exception as e:
-                raise web.HTTPError(
-                    419,
-                    log_message=f"Cannot start remote ssh tunnel for {self._log_name}: {str(e)}"
-                )
         if create_svc:
             try:
                 if self.ssh_custom_svc:
@@ -1372,12 +1358,27 @@ class ForwardBaseSpawner(Spawner):
         # Wrapper around self._start
         # Can be used to cancel start progress while waiting for it's response
         
-        
         self.call_during_startup = False
         
         async def call_subclass_start(self):
             if self.port == 0:
                 self.port = random_port()
+            
+            create_ssh_remote_forward = await self.get_ssh_create_remote_forward()
+            if create_ssh_remote_forward:
+                try:
+                    if self.ssh_custom_forward_remote:
+                        port_forward_remote = self.ssh_custom_forward_remote(self, self.ssh_custom_forward_remote)
+                        if inspect.isawaitable(port_forward_remote):
+                            await port_forward_remote
+                    else:
+                        await self.ssh_default_forward_remote()
+                except Exception as e:
+                    raise web.HTTPError(
+                        419,
+                        log_message=f"Cannot start remote ssh tunnel for {self._log_name}: {str(e)}"
+                    )
+            
             self._start_future = asyncio.ensure_future(self._start())
             try:
                 resp = await self._start_future
