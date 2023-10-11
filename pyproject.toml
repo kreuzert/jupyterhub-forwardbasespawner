@@ -21,18 +21,14 @@ dependencies = [
     "jinja2",
     "jupyterhub>=4.0.0",
     "traitlets",
-    "urllib3"
+    "urllib3",
+    "kubernetes"
 ]
 dynamic = ["version"]
 
 [git]
 message_template = "Bump to {new_version}"
 tag_template = "{new_version}"
-
-[tool.hatch.build]
-artifacts = [
-    "forwardbasespawner/templates/*"
-]
 
 [tool.hatch.version]
 path = "forwardbasespawner/_version.py"
@@ -46,10 +42,6 @@ github_url = "https://github.com/kreuzert/jupyterhub-forwardbasespawner"
 
 [tool.tbump.version]
 current = "0.0.1.dev1"
-
-# Example of a semver regexp.
-# Make sure this matches current_version before
-# using tbump
 regex = '''
   (?P<major>\d+)
   \.
@@ -70,13 +62,7 @@ tag_template = "{new_version}"
 # pyproject.toml location.
 
 [[tool.tbump.file]]
-src = "pyproject.toml"
-search = 'version = "{current_version}"'
-
-[[tool.tbump.file]]
 src = "forwardbasespawner/_version.py"
-version_template = '({major}, {minor}, {patch}, "{pre}", "{dev}")'
-search = "version_info = {current_version}"
 
 #[[tool.tbump.file]]
 #src = "docs/source/_static/rest-api.yml"
