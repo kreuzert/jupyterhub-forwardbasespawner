@@ -1137,7 +1137,7 @@ class ForwardBaseSpawner(Spawner):
 
         start_cmd = cmd.copy()
         start_cmd.extend([f"{user}@{node}", "start"])
-        returncode, out, err = self.subprocess_cmd(start_cmd)
+        returncode, out, err = self.subprocess_cmd(start_cmd, timeout=10)
         if returncode != 217:
             raise Exception(
                 f"Could not create remote forward port ({start_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
