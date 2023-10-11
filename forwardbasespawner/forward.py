@@ -36,7 +36,7 @@ from traitlets import Union
 def get_name(key):
     """Load value from the k8s ConfigMap given a key."""
 
-    path = f"/home/jovyan/jupyterhub-config/config/{key}"
+    path = f"/usr/local/etc/jupyterhub/config/{key}"
     if os.path.exists(path):
         with open(path) as f:
             return f.read()
