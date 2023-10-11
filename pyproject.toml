@@ -25,9 +25,12 @@ dependencies = [
 ]
 dynamic = ["version"]
 
-[git]
-message_template = "Bump to {new_version}"
-tag_template = "{new_version}"
+[tool.black]
+target_version = [
+  "py39",
+  "py310",
+  "py311",
+]
 
 [tool.hatch.version]
 path = "forwardbasespawner/_version.py"
