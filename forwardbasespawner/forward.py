@@ -99,7 +99,7 @@ class ForwardBaseSpawner(Spawner):
                 }
                 return labels
             
-            c.OutpostSpawner.extra_labels = extra_labels
+            c.ForwardBaseSpawner.extra_labels = extra_labels
         """,
     ).tag(config=True)
 
@@ -136,7 +136,7 @@ class ForwardBaseSpawner(Spawner):
                     return True
                 return False
 
-            c.OutpostSpawner.ssh_during_startup = ssh_during_startup
+            c.ForwardBaseSpawner.ssh_during_startup = ssh_during_startup
 
         """,
     ).tag(config=True)
@@ -158,7 +158,7 @@ class ForwardBaseSpawner(Spawner):
                     return "/mnt/private_keys/a"
                 return "/mnt/private_keys/b"
 
-            c.OutpostSpawner.ssh_key = ssh_key
+            c.ForwardBaseSpawner.ssh_key = ssh_key
 
         """,
     ).tag(config=True)
@@ -180,7 +180,7 @@ class ForwardBaseSpawner(Spawner):
                     return "/mnt/private_keys/a"
                 return "/mnt/private_keys/b"
 
-            c.OutpostSpawner.ssh_remote_key = ssh_remote_key
+            c.ForwardBaseSpawner.ssh_remote_key = ssh_remote_key
 
         """,
     ).tag(config=True)
@@ -201,7 +201,7 @@ class ForwardBaseSpawner(Spawner):
                     return "jupyterhuboutpost"
                 return "ubuntu"
 
-            c.OutpostSpawner.ssh_username = ssh_username
+            c.ForwardBaseSpawner.ssh_username = ssh_username
 
         """,
     ).tag(config=True)
@@ -222,7 +222,7 @@ class ForwardBaseSpawner(Spawner):
                     return "jupyterhuboutpost"
                 return "ubuntu"
 
-            c.OutpostSpawner.ssh_remote_username = ssh_username
+            c.ForwardBaseSpawner.ssh_remote_username = ssh_username
 
         """,
     ).tag(config=True)
@@ -245,7 +245,7 @@ class ForwardBaseSpawner(Spawner):
                 else:
                     return "<public_ip>"
 
-            c.OutpostSpawner.ssh_node = ssh_node
+            c.ForwardBaseSpawner.ssh_node = ssh_node
 
         """,
     ).tag(config=True)
@@ -268,7 +268,7 @@ class ForwardBaseSpawner(Spawner):
                 else:
                     return "<public_ip>"
 
-            c.OutpostSpawner.ssh_remote_node = ssh_node
+            c.ForwardBaseSpawner.ssh_remote_node = ssh_node
 
         """,
     ).tag(config=True)
@@ -290,7 +290,7 @@ class ForwardBaseSpawner(Spawner):
                 else:
                     return 2222
 
-            c.OutpostSpawner.ssh_port = ssh_port
+            c.ForwardBaseSpawner.ssh_port = ssh_port
 
         """,
     ).tag(config=True)
@@ -312,7 +312,7 @@ class ForwardBaseSpawner(Spawner):
                 else:
                     return 2222
 
-            c.OutpostSpawner.ssh_remote_port = ssh_port
+            c.ForwardBaseSpawner.ssh_remote_port = ssh_port
 
         """,
     ).tag(config=True)
@@ -377,7 +377,7 @@ class ForwardBaseSpawner(Spawner):
                     req, action="setuptunnel"
                 )
 
-            c.OutpostSpawner.ssh_custom_forward = ssh_custom_forward
+            c.ForwardBaseSpawner.ssh_custom_forward = ssh_custom_forward
 
         """
     ).tag(config=True)
@@ -406,7 +406,7 @@ class ForwardBaseSpawner(Spawner):
                     req, action="removetunnel"
                 )
 
-            c.OutpostSpawner.ssh_custom_forward_remove = ssh_custom_forward_remove
+            c.ForwardBaseSpawner.ssh_custom_forward_remove = ssh_custom_forward_remove
 
         """
     ).tag(config=True)
@@ -422,7 +422,7 @@ class ForwardBaseSpawner(Spawner):
                 ...
                 return spawner.pod_name, spawner.port
 
-            c.OutpostSpawner.ssh_custom_svc = ssh_custom_svc
+            c.ForwardBaseSpawner.ssh_custom_svc = ssh_custom_svc
 
         """
     ).tag(config=True)
@@ -438,7 +438,7 @@ class ForwardBaseSpawner(Spawner):
                 ...
                 return spawner.pod_name, spawner.port
 
-            c.OutpostSpawner.ssh_custom_svc_remove = ssh_custom_svc_remove
+            c.ForwardBaseSpawner.ssh_custom_svc_remove = ssh_custom_svc_remove
 
         """
     ).tag(config=True)
@@ -621,6 +621,25 @@ class ForwardBaseSpawner(Spawner):
         self.already_post_stop_hooked = False
         self._cancel_event_yielded = False
 
+    show_first_default_event = Any(
+        default_value=True,
+        help="""
+        Hook to define if the default event at 0% should be shown.
+        
+        Can be a boolean or a callable function.
+        This maybe a coroutine.
+        """,
+    ).tag(config=True)
+
+    async def get_show_first_default_event(self):
+        if callable(self.show_first_default_event):
+            show_first_default_event = await maybe_future(
+                self.show_first_default_event(self)
+            )
+        else:
+            show_first_default_event = self.show_first_default_event
+        return show_first_default_event
+
     async def _generate_progress(self):
         """Private wrapper of progress generator
 
@@ -632,11 +651,37 @@ class ForwardBaseSpawner(Spawner):
             )
             return
 
-        # yield {"progress": 0, "message": "Server requested"}
+        show_first_default_event = await self.get_show_first_default_event()
+        if show_first_default_event:
+            yield {"progress": 0, "message": "Server requested"}
 
         async with aclosing(self.progress()) as progress:
             async for event in progress:
                 yield event
+
+    async def progress(self):
+        spawn_future = self._spawn_future
+        next_event = 0
+
+        break_while_loop = False
+        while True:
+            # Ensure we always capture events following the start_future
+            # signal has fired.
+            if spawn_future.done():
+                break_while_loop = True
+
+            len_events = len(self.latest_events)
+            if next_event < len_events:
+                for i in range(next_event, len_events):
+                    yield self.latest_events[i]
+                    if self.latest_events[i].get("failed", False) == True:
+                        self._cancel_event_yielded = True
+                        break_while_loop = True
+                next_event = len_events
+
+            if break_while_loop:
+                break
+            await asyncio.sleep(self.yield_wait_seconds)
 
     filter_events = Callable(
         allow_none=True,
@@ -652,7 +697,7 @@ class ForwardBaseSpawner(Spawner):
                 event["html_message"] = event.get("message", "No message available")
                 return event
 
-            c.EventOutpostSpawner.filter_events = custom_filter_events
+            c.ForwardBaseSpawner.filter_events = custom_filter_events
         """,
     ).tag(config=True)
 
@@ -689,7 +734,7 @@ class ForwardBaseSpawner(Spawner):
                     "html_message": f"<details><summary>{now}: Cancelling start ...</summary>We're stopping the start process.</details>",
                 }
         
-            c.EventOutpostSpawner.cancelling_event = cancel_click_event
+            c.ForwardBaseSpawner.cancelling_event = cancel_click_event
         """,
     ).tag(config=True)
 
