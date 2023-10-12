@@ -484,13 +484,9 @@ class ForwardBaseSpawner(Spawner):
         Default::
 
             ssh_forward_remote_options_all = {
-                "ServerAliveInterval": "15",
                 "StrictHostKeyChecking": "accept-new",
-                "ControlMaster": "auto",
-                "ControlPersist": "yes",
                 "Port": str(ssh_port),
                 "ControlPath": f"/tmp/control_{ssh_address_or_host}",
-                "IdentityFile": ssh_pkey,
             }        
         
         """,
@@ -964,6 +960,7 @@ class ForwardBaseSpawner(Spawner):
         ssh_pkey = await self.get_ssh_remote_key()
 
         ssh_forward_options_all = {
+            "StrictHostKeyChecking": "accept-new",
             "Port": str(ssh_port),
             "IdentityFile": ssh_pkey,
         }
