@@ -8,17 +8,20 @@ import subprocess
 import time
 import traceback
 from datetime import datetime
+from datetime import timedelta
 from functools import lru_cache
 from urllib.parse import urlparse
 
 import escapism
 from async_generator import aclosing
 from jupyterhub.spawner import Spawner
+from jupyterhub.utils import AnyTimeoutError
 from jupyterhub.utils import maybe_future
 from jupyterhub.utils import random_port
 from jupyterhub.utils import url_path_join
 from kubernetes import client
 from kubernetes import config
+from tornado import gen
 from tornado import web
 from traitlets import Any
 from traitlets import Bool
@@ -946,8 +949,8 @@ class ForwardBaseSpawner(Spawner):
             cmd.append(f"-o{key}={value}")
         return ssh_username, ssh_address_or_host, cmd
 
-    async def get_forward_remote_cmd(self, extra_args=["-f", "-N", "-n"]):
-        """Get base options for ssh port forwarding
+    async def get_forward_remote_cmd(self, extra_args=["-n"]):
+        """Get base options for ssh remote port forwarding
 
         Returns:
           (string, string, list): (ssh_user, ssh_node, base_cmd) to be used in ssh
@@ -961,14 +964,8 @@ class ForwardBaseSpawner(Spawner):
         ssh_pkey = await self.get_ssh_remote_key()
 
         ssh_forward_options_all = {
-            "ServerAliveInterval": "15",
-            "StrictHostKeyChecking": "no",
-            "UserKnownHostsFile": "/dev/null",
             "Port": str(ssh_port),
             "IdentityFile": ssh_pkey,
-            "ControlMaster": "auto",
-            "ControlPersist": "yes",
-            "ControlPath": f"/tmp/control_remote_{ssh_address_or_host}",
         }
 
         custom_forward_remote_options = await self.get_ssh_forward_remote_options()
@@ -983,7 +980,7 @@ class ForwardBaseSpawner(Spawner):
             cmd.append(f"-o{key}={value}")
         return ssh_username, ssh_address_or_host, cmd
 
-    def subprocess_cmd(self, cmd, timeout=3):
+    async def subprocess_cmd(self, cmd, timeout=3):
         """Execute bash cmd via subprocess.Popen as user 1000
 
         Returns:
@@ -996,16 +993,26 @@ class ForwardBaseSpawner(Spawner):
             except:
                 pass
 
-        self.log.info(f"SSH cmd: {' '.join(cmd)}")
-        p = subprocess.Popen(
-            cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, preexec_fn=set_uid
+        self.log.debug(f"{self._log_name} - ssh cmd: {' '.join(cmd)}")
+        p = await asyncio.create_subprocess_shell(
+            " ".join(cmd),
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            preexec_fn=set_uid,
         )
+
         try:
-            out, err = p.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired as e:
-            self.log.exception(
-                f"{self._log_name} - subprocess cmd timeout for {' '.join(cmd)}"
-            )
+            comm_future = p.communicate()
+            out, err = await gen.with_timeout(timedelta(seconds=timeout), comm_future)
+        except Exception as e:
+            if isinstance(e, AnyTimeoutError):
+                self.log.warning(
+                    f"{self._log_name} - subprocess cmd timeout ({timeout}) for {' '.join(cmd)}"
+                )
+            else:
+                self.log.exception(
+                    f"{self._log_name} - Unexpected error for {' '.join(cmd)}"
+                )
             p.kill()
             raise e
         return p.returncode, out, err
@@ -1032,7 +1039,7 @@ class ForwardBaseSpawner(Spawner):
                 f"{user}@{node}",
             ]
         )
-        self.subprocess_cmd(cancel_cmd)
+        await self.subprocess_cmd(cancel_cmd)
 
     async def ssh_default_forward(self):
         """Default function to create port forward.
@@ -1046,7 +1053,7 @@ class ForwardBaseSpawner(Spawner):
         user, node, cmd = await self.get_forward_cmd()
         check_cmd = cmd.copy()
         check_cmd.extend(["-O", "check", f"{user}@{node}"])
-        returncode, out, err = self.subprocess_cmd(check_cmd)
+        returncode, out, err = await self.subprocess_cmd(check_cmd)
 
         if returncode != 0:
             # Create multiplex connection
@@ -1056,9 +1063,9 @@ class ForwardBaseSpawner(Spawner):
             # First creation always runs in a timeout. Expect this and check
             # the success with check_cmd again
             try:
-                returncode, out, err = self.subprocess_cmd(connect_cmd, timeout=1)
-            except subprocess.TimeoutExpired as e:
-                returncode, out, err = self.subprocess_cmd(check_cmd)
+                returncode, out, err = await self.subprocess_cmd(connect_cmd, timeout=1)
+            except AnyTimeoutError as e:
+                returncode, out, err = await self.subprocess_cmd(check_cmd)
 
             if returncode != 0:
                 raise Exception(
@@ -1078,8 +1085,11 @@ class ForwardBaseSpawner(Spawner):
             ]
         )
 
-        returncode, out, err = self.subprocess_cmd(create_cmd)
+        returncode, out, err = await self.subprocess_cmd(create_cmd)
         if returncode != 0:
+            self.log.warning(
+                f"Could not forward port ({create_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
+            )
             # Maybe there's an old forward still running for this
             cancel_cmd = cmd.copy()
             cancel_cmd.extend(
@@ -1090,9 +1100,12 @@ class ForwardBaseSpawner(Spawner):
                     f"{user}@{node}",
                 ]
             )
-            self.subprocess_cmd(cancel_cmd)
+            returncode, out, err = await self.subprocess_cmd(cancel_cmd)
+            self.log.warning(
+                f"Could not remote previous port forwarding ({cancel_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
+            )
 
-            returncode, out, err = self.subprocess_cmd(create_cmd)
+            returncode, out, err = await self.subprocess_cmd(create_cmd)
             if returncode != 0:
                 raise Exception(
                     f"Could not forward port ({create_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
@@ -1103,52 +1116,31 @@ class ForwardBaseSpawner(Spawner):
         service_address, service_port = self.split_service_address(
             self.port_forward_info.get("service")
         )
-        user, node, cmd = await self.get_forward_remote_cmd(extra_args=["-f", "-n"])
+        user, node, cmd = await self.get_forward_remote_cmd()
         stop_cmd = cmd.copy()
         stop_cmd.extend([f"{user}@{node}", "stop"])
-        self.subprocess_cmd(stop_cmd)
+        await self.subprocess_cmd(stop_cmd)
 
     async def ssh_default_forward_remote(self):
-        """Default function to create port forward.
-        Forwards 0.0.0.0:{self.port} to {service_address}:{service_port} within
-        the hub container. Uses ssh multiplex feature to reduce open connections
+        """Default function to create remote port forward.
+        Forwards 0.0.0.0:<custom_port> to JupyterHub on an external system.
+        This allows a JupyterLab without internet connection running
+        on an external system. It will reach its JupyterHub via this
+        port forward process.
 
         Returns:
           None
         """
-        # check if ssh multiplex connection is up
         user, node, cmd = await self.get_forward_remote_cmd()
-        check_cmd = cmd.copy()
-        check_cmd.extend(["-O", "check", f"{user}@{node}"])
-        returncode, out, err = self.subprocess_cmd(check_cmd)
-
-        if returncode != 0:
-            # Create multiplex connection
-            connect_cmd = cmd.copy()
-            connect_cmd.append(f"{user}@{node}")
-
-            # First creation always runs in a timeout. Expect this and check
-            # the success with check_cmd again
-            try:
-                returncode, out, err = self.subprocess_cmd(connect_cmd, timeout=1)
-            except subprocess.TimeoutExpired as e:
-                returncode, out, err = self.subprocess_cmd(check_cmd)
-
-            if returncode != 0:
-                raise Exception(
-                    f"Could not create remote ssh connection ({connect_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
-                )
-
-        user, node, cmd = await self.get_forward_remote_cmd(extra_args=["-f", "-n"])
         start_cmd = cmd.copy()
         start_cmd.extend([f"{user}@{node}", "start"])
         try:
-            returncode, out, err = self.subprocess_cmd(start_cmd, timeout=120)
+            returncode, out, err = await self.subprocess_cmd(start_cmd)
         except subprocess.TimeoutExpired as e:
             self.log.info("Start cmd timeout. Check if it's running with status.")
             status_cmd = cmd.copy()
             status_cmd.extend([f"{user}@{node}", "status"])
-            returncode, out, err = self.subprocess_cmd(status_cmd, timeout=120)
+            returncode, out, err = await self.subprocess_cmd(status_cmd)
         if returncode != 217:
             raise Exception(
                 f"Could not create remote forward port ({start_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
