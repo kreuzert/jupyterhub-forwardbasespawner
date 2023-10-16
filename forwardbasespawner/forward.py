@@ -577,7 +577,7 @@ class ForwardBaseSpawner(Spawner):
     def get_state(self):
         """get the current state"""
         state = super().get_state()
-        state["port_forward_info"] = self.port_forward_info
+        state["port_forward_info"] = copy.deepcopy(self.port_forward_info)
         state["port"] = self.port
         if self.events:
             if type(self.events) != dict:
@@ -603,7 +603,7 @@ class ForwardBaseSpawner(Spawner):
         """load state from the database"""
         super().load_state(state)
         if "port_forward_info" in state:
-            self.port_forward_info = state["port_forward_info"]
+            self.port_forward_info = copy.deepcopy(state["port_forward_info"])
         if "events" in state:
             self.events = state["events"]
             if "latest" in self.events:
@@ -620,6 +620,7 @@ class ForwardBaseSpawner(Spawner):
         self.already_stopped = False
         self.already_post_stop_hooked = False
         self._cancel_event_yielded = False
+        self.latest_events = []
 
     show_first_default_event = Any(
         default_value=True,
@@ -932,6 +933,12 @@ class ForwardBaseSpawner(Spawner):
             else:
                 await self.ssh_default_forward()
         except Exception as e:
+            try:
+                await self.run_ssh_forward_remove()
+            except:
+                self.log.exception(
+                    f"{self._log_name} - Could not remove ssh forward processes"
+                )
             raise web.HTTPError(
                 419,
                 log_message=f"Cannot start ssh tunnel for {self.name}: {str(e)}",
@@ -948,6 +955,12 @@ class ForwardBaseSpawner(Spawner):
                 else:
                     return await self.ssh_default_svc()
             except Exception as e:
+                try:
+                    self.run_ssh_forward_remove()
+                except:
+                    self.log.exception(
+                        f"{self._log_name} - Could not remove ssh forward processes"
+                    )
                 raise web.HTTPError(
                     419,
                     log_message=f"Cannot create svc for {self._log_name}: {str(e)}",
@@ -1035,7 +1048,7 @@ class ForwardBaseSpawner(Spawner):
             except:
                 pass
 
-        self.log.debug(f"{self._log_name} - ssh cmd: {' '.join(cmd)}")
+        self.log.info(f"{self._log_name} - ssh cmd: \n{' '.join(cmd)}")
         p = await asyncio.create_subprocess_shell(
             " ".join(cmd),
             stderr=subprocess.PIPE,

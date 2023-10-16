@@ -1,13 +1,11 @@
 import asyncio
 import datetime
 import json
-import os
 
 from jupyterhub.apihandlers import default_handlers
 from jupyterhub.apihandlers.base import APIHandler
 from jupyterhub.scopes import needs_scope
 from tornado import web
-from tornado.httpclient import HTTPRequest
 
 
 class SetupTunnelAPIHandler(APIHandler):
