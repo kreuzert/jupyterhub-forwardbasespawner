@@ -519,8 +519,10 @@ class ForwardBaseSpawner(Spawner):
         if self.post_stop_hook is not None:
             try:
                 return self.post_stop_hook(self)
-            except Exception:
-                self.log.exception("post_stop_hook failed with exception: %s", self)
+            except Exception as e:
+                self.log.exception(
+                    f"{self._log_name} - post_stop_hook failed with exception"
+                )
 
     def get_env(self):
         """Get customized environment variables
@@ -648,7 +650,7 @@ class ForwardBaseSpawner(Spawner):
         """
         if not self._spawn_pending:
             self.log.warning(
-                "Spawn not pending, can't generate progress for %s", self._log_name
+                f"{self._log_name} - Spawn not pending, can't generate progress."
             )
             return
 
@@ -937,7 +939,7 @@ class ForwardBaseSpawner(Spawner):
                 await self.run_ssh_forward_remove()
             except:
                 self.log.exception(
-                    f"{self._log_name} - Could not remove ssh forward processes"
+                    f"{self._log_name} - Could remove ssh forward processes"
                 )
             raise web.HTTPError(
                 419,
@@ -959,7 +961,7 @@ class ForwardBaseSpawner(Spawner):
                     self.run_ssh_forward_remove()
                 except:
                     self.log.exception(
-                        f"{self._log_name} - Could not remove ssh forward processes"
+                        f"{self._log_name} - Could remove ssh forward processes"
                     )
                 raise web.HTTPError(
                     419,
@@ -1143,7 +1145,7 @@ class ForwardBaseSpawner(Spawner):
         returncode, out, err = await self.subprocess_cmd(create_cmd)
         if returncode != 0:
             self.log.warning(
-                f"Could not forward port ({create_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
+                f"{self._log_name} - Could not forward port ({create_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
             )
             # Maybe there's an old forward still running for this
             cancel_cmd = cmd.copy()
@@ -1157,7 +1159,7 @@ class ForwardBaseSpawner(Spawner):
             )
             returncode, out, err = await self.subprocess_cmd(cancel_cmd)
             self.log.warning(
-                f"Could not remote previous port forwarding ({cancel_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
+                f"{self._log_name} - Could not remote previous port forwarding ({cancel_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
             )
 
             returncode, out, err = await self.subprocess_cmd(create_cmd)
@@ -1192,7 +1194,9 @@ class ForwardBaseSpawner(Spawner):
         try:
             returncode, out, err = await self.subprocess_cmd(start_cmd)
         except subprocess.TimeoutExpired as e:
-            self.log.info("Start cmd timeout. Check if it's running with status.")
+            self.log.info(
+                f"{self._log_name} - Start cmd timeout. Check if it's running with status."
+            )
             status_cmd = cmd.copy()
             status_cmd.extend([f"{user}@{node}", "status"])
             returncode, out, err = await self.subprocess_cmd(status_cmd)
@@ -1289,7 +1293,7 @@ class ForwardBaseSpawner(Spawner):
             else:
                 await self.ssh_default_forward_remove()
         except:
-            self.log.exception("Could not cancel port forwarding")
+            self.log.exception(f"{self._log_name} - Could not cancel port forwarding")
         try:
             if self.ssh_custom_svc_remove:
                 ssh_custom_svc_remove = self.ssh_custom_svc_remove(
@@ -1300,7 +1304,9 @@ class ForwardBaseSpawner(Spawner):
             else:
                 await self.ssh_default_svc_remove()
         except:
-            self.log.exception("Could not delete port forwarding svc")
+            self.log.exception(
+                f"{self._log_name} - Could not delete port forwarding svc"
+            )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1508,7 +1514,7 @@ class ForwardBaseSpawner(Spawner):
 
             # Port may have changed in port forwarding or by remote outpost service.
             self.port = int(port)
-            self.log.info(f"Expect JupyterLab at {ret}")
+            self.log.info(f"{self._log_name} - Expect JupyterLab at {ret}")
             return ret
 
         self._start_future_response = asyncio.ensure_future(call_subclass_start(self))
@@ -1533,7 +1539,7 @@ class ForwardBaseSpawner(Spawner):
                     await self.run_ssh_forward(create_svc=False)
                 except:
                     self.log.exception(
-                        "Could not recreate ssh tunnel during startup. Stop server"
+                        f"{self._log_name} - Could not recreate ssh tunnel during startup. Stop server"
                     )
                     self.call_during_startup = False
                     await self.stop(cancel=True)
@@ -1566,7 +1572,7 @@ class ForwardBaseSpawner(Spawner):
         finally:
             if event:
                 if callable(event):
-                    event = await maybe_future(event)
+                    event = await maybe_future(event())
                 self.latest_events.append(event)
 
         # We've implemented a cancel feature, which allows us to call
@@ -1582,7 +1588,9 @@ class ForwardBaseSpawner(Spawner):
         # cancel self._start, if it's running
         for future in [self._start_future_response, self._start_future]:
             if future and type(future) is asyncio.Task:
-                self.log.warning(f"Start future status: {future._state}")
+                self.log.warning(
+                    f"{self._log_name} - Start future status: {future._state}"
+                )
                 if future._state in ["PENDING"]:
                     try:
                         future.cancel()
@@ -1590,7 +1598,7 @@ class ForwardBaseSpawner(Spawner):
                     except asyncio.CancelledError:
                         pass
             else:
-                self.log.debug(f"{future} not cancelled.")
+                self.log.debug(f"{self._log_name} - {future} not cancelled.")
 
     async def cancel(self):
         try:
