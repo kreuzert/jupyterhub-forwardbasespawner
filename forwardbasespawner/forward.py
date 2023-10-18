@@ -105,7 +105,7 @@ class ForwardBaseSpawner(Spawner):
 
     ssh_recreate_at_start = Union(
         [Callable(), Bool()],
-        default_value=True,
+        default_value=False,
         help="""
         Whether ssh tunnels should be recreated at JupyterHub start or not.
         If you have outsourced the port forwarding to an extra pod, you can
@@ -507,6 +507,24 @@ class ForwardBaseSpawner(Spawner):
         if self.already_stopped:
             raise Exception("Server is in the process of stopping, please wait.")
         """Run the pre_spawn_hook if defined"""
+
+        # Save latest events with start event time
+        if self.latest_events != []:
+            try:
+                start_event = self.latest_events[0]
+                start_event_time = self._get_event_time(start_event)
+                self.events[start_event_time] = self.latest_events
+            except:
+                self.log.info(
+                    f"Could not retrieve latest_events. Reset events list for {self._log_name}"
+                )
+                self.latest_events = []
+                self.events = {}
+        self.latest_events = []
+        if type(self.events) != dict:
+            self.events = {}
+        self.events["latest"] = self.latest_events
+
         if self.pre_spawn_hook:
             return self.pre_spawn_hook(self)
 
@@ -1524,6 +1542,10 @@ class ForwardBaseSpawner(Spawner):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
 
     async def poll(self):
+        if self.already_stopped:
+            # avoid loop with stop
+            return 0
+
         status = await self._poll()
 
         if self.call_during_startup:
@@ -1565,15 +1587,18 @@ class ForwardBaseSpawner(Spawner):
 
         if cancel:
             # If self._start is still running we cancel it here
+            cancelling_event = await self.get_cancelling_event()
+            self.latest_events.append(cancelling_event)
             await self.cancel_start_function()
 
         try:
             await self._stop(now=now, **kwargs)
         finally:
-            if event:
-                if callable(event):
-                    event = await maybe_future(event())
-                self.latest_events.append(event)
+            if not event:
+                event = await self.get_stop_event()
+            elif callable(event):
+                event = await maybe_future(event(self))
+            self.latest_events.append(event)
 
         # We've implemented a cancel feature, which allows us to call
         # Spawner.stop(cancel=True) and stop the spawn process.
