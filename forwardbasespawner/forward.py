@@ -1337,7 +1337,7 @@ class ForwardBaseSpawner(Spawner):
             namespace=self.namespace, name=self.svc_name
         )
 
-    public_api_url = Unicode(
+    public_api_url = Any(
         help="""
         Singleuser servers started remotely may have to use a different api_url than
         the default internal one. This will overwrite `JUPYTERHUB_API_URL` in env.
@@ -1347,13 +1347,20 @@ class ForwardBaseSpawner(Spawner):
 
     @default("public_api_url")
     def _public_api_url_default(self):
-        if self.hub_connect_url is not None:
-            hub_api_url = url_path_join(
-                self.hub_connect_url, urlparse(self.hub.api_url).path
-            )
+        if callable(self.public_api_url):
+            public_api_url = self.public_api_url(self)
+            if inspect.isawaitable(public_api_url):
+                public_api_url = await public_api_url
+        elif self.public_api_url:
+            public_api_url = self.public_api_url
         else:
-            hub_api_url = self.hub.api_url
-        return hub_api_url
+            if self.hub_connect_url is not None:
+                public_api_url = url_path_join(
+                    self.hub_connect_url, urlparse(self.hub.api_url).path
+                )
+            else:
+                public_api_url = self.hub.api_url
+        return public_api_url
 
     dns_name_template = Unicode(
         "{name}.{namespace}.svc.cluster.local",
