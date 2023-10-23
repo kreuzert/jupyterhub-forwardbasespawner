@@ -552,7 +552,7 @@ class ForwardBaseSpawner(Spawner):
         """
         env = super().get_env()
 
-        env["JUPYTERHUB_API_URL"] = self.public_api_url.rstrip("/")
+        env["JUPYTERHUB_API_URL"] = self.get_public_api_url().rstrip("/")
         env[
             "JUPYTERHUB_ACTIVITY_URL"
         ] = f"{env['JUPYTERHUB_API_URL']}/users/{self.user.name}/activity"
@@ -1345,12 +1345,9 @@ class ForwardBaseSpawner(Spawner):
         """,
     ).tag(config=True)
 
-    @default("public_api_url")
-    def _public_api_url_default(self):
+    def get_public_api_url(self):
         if callable(self.public_api_url):
             public_api_url = self.public_api_url(self)
-            if inspect.isawaitable(public_api_url):
-                public_api_url = await public_api_url
         elif self.public_api_url:
             public_api_url = self.public_api_url
         else:
