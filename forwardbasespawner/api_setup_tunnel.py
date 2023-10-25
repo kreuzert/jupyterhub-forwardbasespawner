@@ -1,5 +1,5 @@
-import asyncio
 import datetime
+import inspect
 import json
 
 from jupyterhub.apihandlers import default_handlers
@@ -73,10 +73,16 @@ class SetupTunnelAPIHandler(APIHandler):
                         "event": failed_event,
                     },
                 )
-                asyncio.create_task(spawner.stop(cancel=True, event=failed_event))
-            self.set_header("Content-Type", "text/plain")
-            self.set_status(204)
-            return
+                stop = spawner.stop(cancel=True, event=failed_event)
+                if inspect.isawaitable(stop):
+                    await stop
+                self.set_header("Content-Type", "text/plain")
+                self.set_status(400)
+                return
+            else:
+                self.set_header("Content-Type", "text/plain")
+                self.set_status(204)
+                return
         else:
             self.set_header("Content-Type", "text/plain")
             self.write("Bad Request.")

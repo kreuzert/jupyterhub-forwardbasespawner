@@ -250,6 +250,27 @@ class ForwardBaseSpawner(Spawner):
         """,
     ).tag(config=True)
 
+    ssh_node_mapping = Callable(
+        allow_none=True,
+        default_value=None,
+        help="""
+        An optional hook function, you can implement to
+        set the map the given ssh node to a different avlue.
+
+        This may be a coroutine.
+
+        Example::
+
+            def ssh_node_mapping(spawner, ssh_node):
+                if ssh_node == "<internal_hostname>":
+                    return "<external_dns_name>"
+                return ssh_node
+
+            c.ForwardBaseSpawner.ssh_node_mapping = ssh_node_mapping
+
+        """,
+    ).tag(config=True)
+
     ssh_remote_node = Union(
         [Callable(), Unicode()],
         allow_none=True,
@@ -926,7 +947,18 @@ class ForwardBaseSpawner(Spawner):
             ssh_node = await maybe_future(self.ssh_node(self, self.port_forward_info))
         else:
             ssh_node = self.port_forward_info.get("ssh_node", self.ssh_node)
-        return ssh_node
+        return await self.get_ssh_node_mapping(ssh_node)
+
+    async def get_ssh_node_mapping(self, ssh_node):
+        """Get ssh node
+
+        Returns:
+          ssh_node_mapping (string): Used in ssh port forwading command
+        """
+
+        if callable(self.ssh_node_mapping):
+            ssh_node_mapping = await maybe_future(self.ssh_node_mapping(self, ssh_node))
+        return ssh_node_mapping
 
     async def get_ssh_remote_node(self):
         """Get ssh node
@@ -1299,7 +1331,13 @@ class ForwardBaseSpawner(Spawner):
         """
         v1 = self._k8s_get_client_core()
         name = self.svc_name
-        v1.delete_namespaced_service(name=name, namespace=self.namespace)
+        try:
+            v1.delete_namespaced_service(name=name, namespace=self.namespace)
+        except Exception as e:
+            if getattr(e, "reason", "") == "Not Found":
+                pass
+            else:
+                raise e
 
     async def run_ssh_forward_remove(self):
         """Run the custom_create_port_forward if defined, else run the default one"""
@@ -1324,9 +1362,7 @@ class ForwardBaseSpawner(Spawner):
             else:
                 await self.ssh_default_svc_remove()
         except:
-            self.log.exception(
-                f"{self._log_name} - Could not delete port forwarding svc"
-            )
+            self.log.warning(f"{self._log_name} - Could not delete port forwarding svc")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1450,6 +1486,15 @@ class ForwardBaseSpawner(Spawner):
         # k8s object names cannot have trailing -
         return rendered.rstrip("-")
 
+    async def wait_for_stop_event(self):
+        # Wait up to 5 times yield_wait_seconds, before sending stop event to frontend
+        stopwait = time.monotonic() + 5 * self.yield_wait_seconds
+        while time.monotonic() < stopwait:
+            if self._cancel_event_yielded:
+                break
+            await asyncio.sleep(2 * self.yield_wait_seconds)
+        return
+
     def start(self):
         # Wrapper around self._start
         # Can be used to cancel start progress while waiting for it's response
@@ -1495,13 +1540,9 @@ class ForwardBaseSpawner(Spawner):
                     "html_message": f"<details><summary>{now}: JupyterLab start failed ({status_code}). {log_message}</summary>{reason}</details>",
                 }
                 self.latest_events.append(self.stop_event)
-                # Wait up to 5 times yield_wait_seconds, before sending stop event to frontend
-                stopwait = time.monotonic() + 5 * self.yield_wait_seconds
-                while time.monotonic() < stopwait:
-                    if self._cancel_event_yielded:
-                        break
-                    await asyncio.sleep(2 * self.yield_wait_seconds)
+                await self.wait_for_stop_event()
                 raise e
+
             resp_json = {"service": resp}
 
             """
@@ -1560,8 +1601,16 @@ class ForwardBaseSpawner(Spawner):
             ssh_recreate_at_start = await self.get_ssh_recreate_at_start()
 
             if status != None:
-                await self.stop(cancel=True)
-                self.run_post_stop_hook()
+                try:
+                    await self.stop(cancel=True)
+                except:
+                    self.log.exception(f"{self._log_name} - Could not stop")
+                try:
+                    self.run_post_stop_hook()
+                except:
+                    self.log.exception(
+                        f"{self._log_name} - Could not run post stop hook"
+                    )
                 return status
             elif ssh_recreate_at_start:
                 try:
@@ -1596,22 +1645,33 @@ class ForwardBaseSpawner(Spawner):
             # If self._start is still running we cancel it here
             cancelling_event = await self.get_cancelling_event()
             self.latest_events.append(cancelling_event)
-            await self.cancel_start_function()
-
+            try:
+                await self.cancel_start_function()
+            except:
+                self.log.exception(
+                    f"{self._log_name} - Start wrapper function cancelled"
+                )
         try:
             await self._stop(now=now, **kwargs)
+        except:
+            self.log.exception(f"{self._log_name} - Could not stop")
+            pass
         finally:
             if not event:
                 event = await self.get_stop_event()
             elif callable(event):
                 event = await maybe_future(event(self))
             self.latest_events.append(event)
+            await self.wait_for_stop_event()
 
         # We've implemented a cancel feature, which allows us to call
         # Spawner.stop(cancel=True) and stop the spawn process.
         # Used by api_setup_tunnel.py.
         if cancel:
-            await self.cancel()
+            try:
+                await self.cancel()
+            except:
+                self.log.exception(f"{self._log_name} - Start function cancelled")
 
         if self.port_forward_info:
             await self.run_ssh_forward_remove()
@@ -1620,9 +1680,6 @@ class ForwardBaseSpawner(Spawner):
         # cancel self._start, if it's running
         for future in [self._start_future_response, self._start_future]:
             if future and type(future) is asyncio.Task:
-                self.log.warning(
-                    f"{self._log_name} - Start future status: {future._state}"
-                )
                 if future._state in ["PENDING"]:
                     try:
                         future.cancel()
