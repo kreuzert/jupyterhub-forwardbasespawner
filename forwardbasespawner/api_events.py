@@ -81,7 +81,9 @@ class SpawnEventsAPIHandler(APIHandler):
                         "html_message": f"<details><summary>{now}: {user_cancel_message}",
                     }
 
-                asyncio.create_task(spawner.stop(cancel=True, event=stop_event))
+                stop = spawner.stop(cancel=True, event=stop_event)
+                if inspect.isawaitable(stop):
+                    await stop
             else:
                 self.log.debug(
                     f"{spawner._log_name} - APICall: SpawnUpdate",
@@ -93,7 +95,9 @@ class SpawnEventsAPIHandler(APIHandler):
                         "event": event,
                     },
                 )
-                asyncio.create_task(spawner.stop(cancel=True, event=event))
+                stop = spawner.stop(cancel=True, event=event)
+                if inspect.isawaitable(stop):
+                    await stop
             self.set_header("Content-Type", "text/plain")
             self.set_status(204)
             return
