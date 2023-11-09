@@ -991,7 +991,7 @@ class ForwardBaseSpawner(Spawner):
                 await self.run_ssh_forward_remove()
             except:
                 self.log.exception(
-                    f"{self._log_name} - Could remove ssh forward processes"
+                    f"{self._log_name} - Could not remove ssh forward processes"
                 )
             raise web.HTTPError(
                 419,
@@ -1013,7 +1013,7 @@ class ForwardBaseSpawner(Spawner):
                     self.run_ssh_forward_remove()
                 except:
                     self.log.exception(
-                        f"{self._log_name} - Could remove ssh forward processes"
+                        f"{self._log_name} - Could not remove ssh forward processes"
                     )
                 raise web.HTTPError(
                     419,
@@ -1339,7 +1339,7 @@ class ForwardBaseSpawner(Spawner):
             else:
                 raise e
 
-    async def run_ssh_forward_remove(self):
+    async def run_ssh_forward_remove(self, delete_svc=True):
         """Run the custom_create_port_forward if defined, else run the default one"""
         try:
             if self.ssh_custom_forward_remove:
@@ -1352,17 +1352,20 @@ class ForwardBaseSpawner(Spawner):
                 await self.ssh_default_forward_remove()
         except:
             self.log.exception(f"{self._log_name} - Could not cancel port forwarding")
-        try:
-            if self.ssh_custom_svc_remove:
-                ssh_custom_svc_remove = self.ssh_custom_svc_remove(
-                    self, self.port_forward_info
+        if delete_svc:
+            try:
+                if self.ssh_custom_svc_remove:
+                    ssh_custom_svc_remove = self.ssh_custom_svc_remove(
+                        self, self.port_forward_info
+                    )
+                    if inspect.isawaitable(ssh_custom_svc_remove):
+                        ssh_custom_svc_remove = await ssh_custom_svc_remove
+                else:
+                    await self.ssh_default_svc_remove()
+            except:
+                self.log.warning(
+                    f"{self._log_name} - Could not delete port forwarding svc"
                 )
-                if inspect.isawaitable(ssh_custom_svc_remove):
-                    ssh_custom_svc_remove = await ssh_custom_svc_remove
-            else:
-                await self.ssh_default_svc_remove()
-        except:
-            self.log.warning(f"{self._log_name} - Could not delete port forwarding svc")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
