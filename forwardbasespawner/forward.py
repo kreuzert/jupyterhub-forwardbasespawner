@@ -1540,7 +1540,7 @@ class ForwardBaseSpawner(Spawner):
 
         async def call_subclass_start(self):
             if self.port == 0:
-                self.port = random_port()
+                self.custom_port = random_port()
 
             create_ssh_remote_forward = await self.get_ssh_create_remote_forward()
             if create_ssh_remote_forward:
@@ -1616,7 +1616,7 @@ class ForwardBaseSpawner(Spawner):
                     ret = f"{proto}{service_address}:{port}"
 
             # Port may have changed in port forwarding or by remote Outpost service.
-            self.port = int(port)
+            self.custom_port = int(port)
             self.log.info(f"{self._log_name} - Expect JupyterLab at {ret}")
             return ret
 

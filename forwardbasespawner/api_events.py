@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import inspect
 import json
 
 from jupyterhub.apihandlers import default_handlers
@@ -111,15 +112,16 @@ class SpawnEventsAPIHandler(APIHandler):
             if event is None:
                 event = {}
 
-        if event.get("html_message", ""):
-            # Add timestamp
-            now = datetime.datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
-            if event["html_message"].startswith("<details><summary>"):
-                event[
-                    "html_message"
-                ] = f"<details><summary>{now}: {event['html_message'][len('<details><summary>'):]}"
-            else:
-                event["html_message"] = f"{now}: {event['html_message']}"
+        # Add timestamp
+        now = datetime.datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
+        if event.get("html_message", event.get("message", "")).startswith(
+            "<details><summary>"
+        ):
+            event[
+                "html_message"
+            ] = f"<details><summary>{now}: {event.get('html_message', event.get('message', ''))[len('<details><summary>'):]}"
+        elif not event.get("html_message", ""):
+            event["html_message"] = event.get("message", "")
 
         if not event or spawner._stop_pending:
             self.set_header("Content-Type", "text/plain")
