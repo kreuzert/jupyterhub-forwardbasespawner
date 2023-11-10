@@ -103,6 +103,40 @@ class ForwardBaseSpawner(Spawner):
         """,
     ).tag(config=True)
 
+    custom_port = Union(
+        [Integer(), Callable()],
+        default_value=8080,
+        help="""
+        An optional hook function, or dict, you can implement to define
+        a port depending on the spawner object.
+        
+        Example::
+        
+            from jupyterhub.utils import random_potr
+            def custom_port(spawner, user_options):
+                if user_options.get("system", "") == "A":
+                    return 8080
+                return random_port()
+            
+            c.OutpostSpawner.custom_port = custom_port
+        """,
+    ).tag(config=True)
+
+    @property
+    def port(self):
+        """Get the port used for the singleuser server
+
+        Returns:
+          port (int): port of the newly created singleuser server
+        """
+        if callable(self.custom_port):
+            port = self.custom_port(self, self.user_options)
+        elif self.custom_port:
+            port = self.custom_port
+        else:
+            port = random_port()
+        return port
+
     ssh_recreate_at_start = Union(
         [Callable(), Bool()],
         default_value=False,
@@ -621,7 +655,7 @@ class ForwardBaseSpawner(Spawner):
         """get the current state"""
         state = super().get_state()
         state["port_forward_info"] = copy.deepcopy(self.port_forward_info)
-        state["port"] = self.port
+        state["custom_port"] = self.port
         if self.events:
             if type(self.events) != dict:
                 self.events = {}
@@ -651,8 +685,8 @@ class ForwardBaseSpawner(Spawner):
             self.events = state["events"]
             if "latest" in self.events:
                 self.latest_events = self.events["latest"]
-        if "port" in state:
-            self.port = state["port"]
+        if "custom_port" in state:
+            self.custom_port = state["custom_port"]
 
     def clear_state(self):
         """clear any state (called after shutdown)"""
