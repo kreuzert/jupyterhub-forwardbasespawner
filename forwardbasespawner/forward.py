@@ -285,7 +285,7 @@ class ForwardBaseSpawner(Spawner):
     ).tag(config=True)
 
     svc_create = Union(
-        [Callable(), Boolean()],
+        [Callable(), Bool()],
         allow_none=True,
         default_value=True,
         help="""
