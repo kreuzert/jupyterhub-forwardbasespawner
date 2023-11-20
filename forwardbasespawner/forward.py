@@ -284,6 +284,29 @@ class ForwardBaseSpawner(Spawner):
         """,
     ).tag(config=True)
 
+    svc_create = Union(
+        [Callable(), Boolean()],
+        allow_none=True,
+        default_value=True,
+        help="""
+        An optional hook function, or boolean, you can implement to
+        disable the svc creation.
+
+        This may be a coroutine.
+
+        Example::
+
+            async def svc_create(spawner):
+                if spawner.user_options.get("system", "") == "A":
+                    return False
+                else:
+                    return True
+
+            c.ForwardBaseSpawner.svc_create = svc_create
+
+        """,
+    ).tag(config=True)
+
     ssh_node_mapping = Callable(
         allow_none=True,
         default_value=None,
@@ -1011,6 +1034,18 @@ class ForwardBaseSpawner(Spawner):
             )
         return ssh_remote_node
 
+    async def get_svc_create(self):
+        """Get ssh username
+
+        Returns:
+          ssh_user (string): Used in ssh forward command. Default ist "jupyterhuboutpost"
+        """
+        if callable(self.svc_create):
+            svc_create = await maybe_future(self.svc_create(self))
+        else:
+            svc_create = self.svc_create
+        return svc_create
+
     async def run_ssh_forward(self, create_svc=True):
         """Run the custom_create_port_forward if defined, otherwise run the default one"""
         try:
@@ -1032,8 +1067,12 @@ class ForwardBaseSpawner(Spawner):
                 log_message=f"Cannot start ssh tunnel for {self.name}: {str(e)}",
                 reason=traceback.format_exc(),
             )
-
-        if create_svc:
+        # If the custom_forward function already creates a service
+        # the following won't be necessary.
+        # If it's a hub restart and the hub managed svc still
+        # exists, it's only not necessary to recreat it.
+        class_create_svc = await self.get_svc_create()
+        if class_create_svc and create_svc:
             try:
                 if self.ssh_custom_svc:
                     ssh_custom_svc = self.ssh_custom_svc(self, self.port_forward_info)
@@ -1386,7 +1425,11 @@ class ForwardBaseSpawner(Spawner):
                 await self.ssh_default_forward_remove()
         except:
             self.log.exception(f"{self._log_name} - Could not cancel port forwarding")
-        if delete_svc:
+
+        # If the hub does not manage the k8s svc, we don't have to
+        # delete them.
+        class_create_svc = await self.get_svc_create()
+        if class_create_svc and delete_svc:
             try:
                 if self.ssh_custom_svc_remove:
                     ssh_custom_svc_remove = self.ssh_custom_svc_remove(
