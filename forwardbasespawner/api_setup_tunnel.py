@@ -29,7 +29,7 @@ class SetupTunnelAPIHandler(APIHandler):
 
         if spawner._stop_pending:
             self.log.debug(
-                "APICall: SetupTunnel - but spawner is already stopping.",
+                f"{spawner._log_name} - APICall: SetupTunnel - but spawner is already stopping.",
                 extra={
                     "log_name": spawner._log_name,
                     "user": user_name,
@@ -44,7 +44,7 @@ class SetupTunnelAPIHandler(APIHandler):
 
         if json_body:
             self.log.debug(
-                "APICall: SetupTunnel",
+                f"{spawner._log_name} - APICall: SetupTunnel",
                 extra={
                     "log_name": spawner._log_name,
                     "user": user_name,
@@ -65,7 +65,7 @@ class SetupTunnelAPIHandler(APIHandler):
                     "html_message": f"<details><summary>{now}: Could not setup tunnel</summary>{str(e)}</details>",
                 }
                 self.log.exception(
-                    f"Could not setup tunnel for {user_name}:{server_name}",
+                    f"{spawner._log_name} - Could not setup tunnel for {user_name}:{server_name}",
                     extra={
                         "log_name": spawner._log_name,
                         "user": user_name,

@@ -596,7 +596,7 @@ class ForwardBaseSpawner(Spawner):
                 self.events[start_event_time] = self.latest_events
             except:
                 self.log.info(
-                    f"Could not retrieve latest_events. Reset events list for {self._log_name}"
+                    f"{self._log_name} - Could not retrieve latest_events. Reset events list"
                 )
                 self.latest_events = []
                 self.events = {}
