@@ -41,14 +41,14 @@ class SSHNodeRestartedAPIHandler(APIHandler):
                 )
             except:
                 self.log.warning(
-                    f"{x[0]:x[1]} - Could not remove port_forward before recreating it"
+                    f"{x[0]}:{x[1]} - Could not remove port_forward before recreating it"
                 )
             try:
                 await self.app.users[x[0]].spawners[x[1]].run_ssh_forward(
                     create_svc=False
                 )
             except:
-                self.log.exception(f"{x[0]:x[1]} - Could not recreate port_forward")
+                self.log.exception(f"{x[0]}:{x[1]} - Could not recreate port_forward")
 
     @token_authenticated
     async def get(self, ssh_node):
