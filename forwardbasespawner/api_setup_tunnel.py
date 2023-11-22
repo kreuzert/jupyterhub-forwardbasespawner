@@ -22,7 +22,14 @@ class SetupTunnelAPIHandler(APIHandler):
             # user has no such server
             raise web.HTTPError(404)
         body = self.request.body.decode("utf8")
-        json_body = json.loads(body) if body else {}
+        try:
+            json_body = json.loads(body) if body else {}
+        except:
+            self.set_status(400)
+            self.log.exception(
+                f"{user_name}:{server_name} - Could not load body into json. Body: {body}"
+            )
+            return
 
         user = self.find_user(user_name)
         spawner = user.spawners[server_name]
