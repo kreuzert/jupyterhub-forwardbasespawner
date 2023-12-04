@@ -119,23 +119,23 @@ class SpawnEventsAPIHandler(APIHandler):
             if event is None:
                 event = {}
 
-        # Add timestamp
-        now = datetime.datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
-        if event.get("html_message", event.get("message", "")).startswith(
-            "<details><summary>"
-        ):
-            event[
-                "html_message"
-            ] = f"<details><summary>{now}: {event.get('html_message', event.get('message', ''))[len('<details><summary>'):]}"
-        elif not event.get("html_message", ""):
-            event["html_message"] = event.get("message", "")
-
         if not event or spawner._stop_pending:
             self.set_header("Content-Type", "text/plain")
             self.write("Bad Request")
             self.set_status(400)
             return
         else:
+            # Add timestamp
+            now = datetime.datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
+            if event.get("html_message", event.get("message", "")).startswith(
+                "<details><summary>"
+            ):
+                event[
+                    "html_message"
+                ] = f"<details><summary>{now}: {event.get('html_message', event.get('message', ''))[len('<details><summary>'):]}"
+            elif not event.get("html_message", ""):
+                event["html_message"] = event.get("message", "")
+
             self.log.debug(
                 f"{spawner._log_name} - APICall: SpawnUpdate",
                 extra={
