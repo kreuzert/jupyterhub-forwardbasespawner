@@ -1,17 +1,14 @@
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling<=1.18.0"]
 build-backend = "hatchling.build"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [project]
 name = "jupyterhub-forwardbasespawner"
 description = "JupyterHub BaseSpawner class. Enables remote single-user server."
 readme = "README.md"
 requires-python = ">=3.9"
-licesse = {file = "LICENSE"}
+license = {file = "LICENSE"}
 keywords = ["jupyterhub", "spawner"]
 authors = [
     {name = "Tim Kreuzer", email = "t.kreuzer@fz-juelich.de"},
@@ -57,7 +54,7 @@ regex = '''
   (?P<pre>((a|b|rc)\d+)|)
   \.?
   (?P<dev>(?<=\.)dev\d*|)
-  '''
+'''
 
 [tool.tbump.git]
 message_template = "Bump to {new_version}"
