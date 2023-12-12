@@ -50,6 +50,7 @@ class SetupTunnelAPIHandler(APIHandler):
             return
 
         if json_body:
+            json_body["jhub_userid"] = str(user.id)
             self.log.debug(
                 f"{spawner._log_name} - APICall: SetupTunnel",
                 extra={
