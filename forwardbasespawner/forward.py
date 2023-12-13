@@ -414,6 +414,24 @@ class ForwardBaseSpawner(Spawner):
         """
     ).tag(config=True)
 
+    update_expected_path = Any(
+        default_value=False,
+        help="""
+        Hook which allows to update the return value of Spawner.start().
+        
+        Callable function, may be a coroutine.
+        """,
+    ).tag(config=True)
+
+    async def run_update_expected_path(self, default_start_return_value):
+        if self.update_expected_path:
+            expected_path = self.update_expected_path(self, default_start_return_value)
+            if inspect.isawaitable(expected_path):
+                expected_path = await expected_path
+            return expected_path
+        else:
+            return default_start_return_value
+
     ssh_create_remote_forward = Any(
         default_value=False,
         help="""
@@ -1671,6 +1689,7 @@ class ForwardBaseSpawner(Spawner):
 
             # Port may have changed in port forwarding or by remote Outpost service.
             self.custom_port = int(port)
+            ret = await self.run_update_expected_path(ret)
             self.log.info(f"{self._log_name} - Expect JupyterLab at {ret}")
             return ret
 
