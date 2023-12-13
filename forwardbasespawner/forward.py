@@ -885,7 +885,7 @@ class ForwardBaseSpawner(Spawner):
     def _get_event_time(self, event):
         # Regex for date time
         pattern = re.compile(
-            r"([0-9]+(_[0-9]+)+).*[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,3})?"
+            r"([0-9]+(-[0-9]+)+).*[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,3})?"
         )
         message = event["html_message"]
         match = re.search(pattern, message)
