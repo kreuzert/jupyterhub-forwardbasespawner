@@ -1589,7 +1589,8 @@ class ForwardBaseSpawner(Spawner):
         # Can be used to cancel start progress while waiting for it's response
 
         self.call_during_startup = False
-        self.unique_start_id = uuid.uuid4().hex
+        if not getattr(self, "unique_start_id", ""):
+            self.unique_start_id = uuid.uuid4().hex
 
         async def call_subclass_start(self):
             if self.port == 0:
