@@ -65,7 +65,7 @@ class SetupTunnelAPIHandler(APIHandler):
                 self.db.commit()
                 await spawner.run_ssh_forward()
             except Exception as e:
-                now = datetime.datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
+                now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 failed_event = {
                     "progress": 100,
                     "failed": True,
