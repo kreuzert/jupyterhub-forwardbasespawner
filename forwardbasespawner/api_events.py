@@ -80,7 +80,7 @@ class SpawnEventsAPIHandler(APIHandler):
 
                 # Add correct timestamp to event, at the moment it will be used.
                 async def stop_event(spawner):
-                    now = datetime.datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
+                    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                     return {
                         "failed": True,
                         "ready": False,
@@ -126,7 +126,7 @@ class SpawnEventsAPIHandler(APIHandler):
             return
         else:
             # Add timestamp
-            now = datetime.datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             if event.get("html_message", event.get("message", "")).startswith(
                 "<details><summary>"
             ):

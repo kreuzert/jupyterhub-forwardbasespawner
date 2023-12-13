@@ -695,7 +695,7 @@ class ForwardBaseSpawner(Spawner):
                 value = self.events.get(key, None)
                 if value and len(value) > 0 and value[0]:
                     stime = self._get_event_time(value[0])
-                    dtime = datetime.strptime(stime, "%Y_%m_%d %H:%M:%S")
+                    dtime = datetime.strptime(stime, "%Y-%m-%d %H:%M:%S")
                     now = datetime.now()
                     delta = now - dtime
                     if delta.days:
@@ -835,7 +835,7 @@ class ForwardBaseSpawner(Spawner):
 
             from datetime import datetime
             async def cancel_click_event(spawner):
-                now = datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 return {
                     "failed": False,
                     "ready": False,
@@ -1622,7 +1622,7 @@ class ForwardBaseSpawner(Spawner):
                     "\n", "<br>"
                 )
                 log_message = getattr(e, "log_message", "")
-                now = datetime.now().strftime("%Y_%m_%d %H:%M:%S.%f")[:-3]
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 self.stop_event = {
                     "failed": True,
                     "ready": False,
