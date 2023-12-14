@@ -22,7 +22,11 @@ class ListServersAPIHandler(APIHandler):
             .filter(orm.Spawner.server != None)
             .order_by(orm.Spawner.user_id.asc())
         )
-        names = [f"{x.user_id}_{x.name}" for x in query]
+        names = []
+        for x in query:
+            user = self.find_user(x.user.name)
+            spawner = user.spawners[x.name]
+            names.append(f"{x.user_id}_{x.name}_{spawner.unique_start_id}")
         self.set_status(200)
         self.write(json.dumps(names))
 
