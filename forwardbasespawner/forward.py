@@ -65,7 +65,7 @@ class ForwardBaseSpawner(Spawner):
 
     # Used in api_notifications to check, if the UNICORE notification
     # is for the current start attempt.
-    unique_start_id = ""
+    start_id = ""
 
     # When restarting JupyterHub, we might have to recreate the ssh tunnel.
     # This boolean is used in poll(), to check if it's the first function call
@@ -702,7 +702,7 @@ class ForwardBaseSpawner(Spawner):
         state = super().get_state()
         state["port_forward_info"] = copy.deepcopy(self.port_forward_info)
         state["custom_port"] = self.port
-        state["unique_start_id"] = self.unique_start_id
+        state["start_id"] = self.start_id
         if self.events:
             if type(self.events) != dict:
                 self.events = {}
@@ -734,8 +734,8 @@ class ForwardBaseSpawner(Spawner):
                 self.latest_events = self.events["latest"]
         if "custom_port" in state:
             self.custom_port = state["custom_port"]
-        if "unique_start_id" in state:
-            self.unique_start_id = state["unique_start_id"]
+        if "start_id" in state:
+            self.start_id = state["start_id"]
 
     def clear_state(self):
         """clear any state (called after shutdown)"""
@@ -745,7 +745,7 @@ class ForwardBaseSpawner(Spawner):
         self.port_forward_info = {}
         self.already_stopped = False
         self.already_post_stop_hooked = False
-        self.unique_start_id = ""
+        self.start_id = ""
         self._cancel_event_yielded = False
         self.latest_events = []
 
@@ -1607,8 +1607,8 @@ class ForwardBaseSpawner(Spawner):
         # Can be used to cancel start progress while waiting for it's response
 
         self.call_during_startup = False
-        if not getattr(self, "unique_start_id", ""):
-            self.unique_start_id = uuid.uuid4().hex
+        if not getattr(self, "start_id", ""):
+            self.start_id = uuid.uuid4().hex
 
         async def call_subclass_start(self):
             if self.port == 0:
