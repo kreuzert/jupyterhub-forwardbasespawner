@@ -1079,12 +1079,12 @@ class ForwardBaseSpawner(Spawner):
             if self.ssh_custom_forward:
                 port_forward = self.ssh_custom_forward(self, self.port_forward_info)
                 if inspect.isawaitable(port_forward):
-                    await port_forward
+                    ret = await port_forward
             else:
-                await self.ssh_default_forward()
+                ret = await self.ssh_default_forward()
         except Exception as e:
             try:
-                await self.run_ssh_forward_remove()
+                ret = await self.run_ssh_forward_remove()
             except:
                 self.log.exception(
                     f"{self._log_name} - Could not remove ssh forward processes"
@@ -1105,9 +1105,9 @@ class ForwardBaseSpawner(Spawner):
                     ssh_custom_svc = self.ssh_custom_svc(self, self.port_forward_info)
                     if inspect.isawaitable(ssh_custom_svc):
                         ssh_custom_svc = await ssh_custom_svc
-                    return ssh_custom_svc
+                    ret = ssh_custom_svc
                 else:
-                    return await self.ssh_default_svc()
+                    ret = await self.ssh_default_svc()
             except Exception as e:
                 try:
                     self.run_ssh_forward_remove()
@@ -1120,6 +1120,7 @@ class ForwardBaseSpawner(Spawner):
                     log_message=f"Cannot create svc for {self._log_name}: {str(e)}",
                     reason=traceback.format_exc(),
                 )
+        return ret
 
     async def get_forward_cmd(self, extra_args=["-f", "-N", "-n"]):
         """Get base options for ssh port forwarding
