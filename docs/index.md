@@ -43,3 +43,11 @@ A subclass of the ForwardBaseSpawner which implements the actual start/stop logi
     spawners/forwardbasespawner
     apiendpoints
 ```
+
+```{eval-rst}
+.. toctree::
+    :maxdepth: 2
+    :caption: Reference
+
+    changelog
+```
