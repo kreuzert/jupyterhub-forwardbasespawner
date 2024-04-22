@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: JupyterHub OutpostSpawner
-  description: The REST API for JupyterHub OutpostSpawner
+  title: JupyterHub ForwardBaseSpawner
+  description: The REST API for JupyterHub ForwardBaseSpawner
   license:
     name: BSD-3-Clause
 servers:
@@ -278,7 +278,7 @@ paths:
                 service:
                   type: string
                   description: |
-                    Where the JupyterHub Outpost will be able to reach
+                    Where JupyterHub will be able to reach
                     the JupyterLab.
                   required: true
                 ssh_port:
@@ -366,7 +366,7 @@ paths:
                 service:
                   type: string
                   description: |
-                    Where the JupyterHub Outpost will be able to reach
+                    Where JupyterHub will be able to reach
                     the JupyterLab.
                   required: true
                 ssh_port:

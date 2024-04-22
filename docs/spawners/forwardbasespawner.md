@@ -1,4 +1,4 @@
-# OutpostSpawner
+# ForwardBaseSpawner
 
 ```{eval-rst}
 .. automodule:: forwardbasespawner
