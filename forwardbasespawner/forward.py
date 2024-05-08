@@ -226,7 +226,7 @@ class ForwardBaseSpawner(Spawner):
 
     ssh_username = Union(
         [Callable(), Unicode()],
-        default_value="jupyterhuboutpost",
+        default_value="jhuboutpost",
         help="""
         An optional hook function, or string, you can implement to
         set the ssh username used for ssh port forwarding.
@@ -237,7 +237,7 @@ class ForwardBaseSpawner(Spawner):
 
             def ssh_username(spawner):
                 if spawner.user_options.get("system", "") == "A":
-                    return "jupyterhuboutpost"
+                    return "jhuboutpost"
                 return "ubuntu"
 
             c.ForwardBaseSpawner.ssh_username = ssh_username
@@ -247,7 +247,7 @@ class ForwardBaseSpawner(Spawner):
 
     ssh_remote_username = Union(
         [Callable(), Unicode()],
-        default_value="jupyterhuboutpost",
+        default_value="jhuboutpost",
         help="""
         An optional hook function, or string, you can implement to
         set the ssh username used for ssh port forwarding remote.
@@ -258,7 +258,7 @@ class ForwardBaseSpawner(Spawner):
 
             def ssh_username(spawner):
                 if spawner.user_options.get("system", "") == "A":
-                    return "jupyterhuboutpost"
+                    return "jhuboutpost"
                 return "ubuntu"
 
             c.ForwardBaseSpawner.ssh_remote_username = ssh_username
@@ -953,7 +953,7 @@ class ForwardBaseSpawner(Spawner):
         """Get ssh username
 
         Returns:
-          ssh_user (string): Used in ssh forward command. Default ist "jupyterhuboutpost"
+          ssh_user (string): Used in ssh forward command. Default is "jhuboutpost"
         """
         if callable(self.ssh_username):
             ssh_user = await maybe_future(
@@ -967,7 +967,7 @@ class ForwardBaseSpawner(Spawner):
         """Get ssh username
 
         Returns:
-          ssh_remote_username (string): Used in ssh forward command. Default ist "None"
+          ssh_remote_username (string): Used in ssh forward command. Default is "None"
         """
         if callable(self.ssh_remote_username):
             ssh_remote_username = await maybe_future(
@@ -1042,6 +1042,8 @@ class ForwardBaseSpawner(Spawner):
 
         if callable(self.ssh_node_mapping):
             ssh_node_mapping = await maybe_future(self.ssh_node_mapping(self, ssh_node))
+        else:
+            ssh_node_mapping = ssh_node
         return ssh_node_mapping
 
     async def get_ssh_remote_node(self):
@@ -1065,7 +1067,7 @@ class ForwardBaseSpawner(Spawner):
         """Get ssh username
 
         Returns:
-          ssh_user (string): Used in ssh forward command. Default ist "jupyterhuboutpost"
+          svc_create (bool): Whether a service should be created. Default is True
         """
         if callable(self.svc_create):
             svc_create = await maybe_future(self.svc_create(self))
