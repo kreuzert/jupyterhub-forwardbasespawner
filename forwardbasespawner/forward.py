@@ -1423,7 +1423,7 @@ class ForwardBaseSpawner(Spawner):
                 )
             else:
                 raise e
-        return self.svc_name, self.port
+        return f"{self.svc_name}.{self.namespace}.svc", self.port
 
     async def ssh_default_svc_remove(self):
         """Remove Kubernetes Service
