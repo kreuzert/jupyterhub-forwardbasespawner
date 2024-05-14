@@ -110,7 +110,7 @@ class ForwardBaseSpawner(Spawner):
 
     custom_port = Union(
         [Integer(), Callable()],
-        default_value=8080,
+        default_value=0,
         help="""
         An optional hook function, or dict, you can implement to define
         a port depending on the spawner object.
@@ -140,6 +140,7 @@ class ForwardBaseSpawner(Spawner):
             port = self.custom_port
         else:
             port = random_port()
+            self.custom_port = port
         return port
 
     ssh_recreate_at_start = Union(
