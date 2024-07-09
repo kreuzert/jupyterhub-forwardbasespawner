@@ -1656,6 +1656,7 @@ class ForwardBaseSpawner(Spawner):
                 await self.wait_for_stop_event()
                 raise e
 
+            self.log.info(f"{self._log_name} - Start response: {resp}")
             resp_json = {"service": resp}
 
             """
