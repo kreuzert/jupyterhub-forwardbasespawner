@@ -1767,10 +1767,12 @@ class ForwardBaseSpawner(Spawner):
                     f"{self._log_name} - Start wrapper function cancelled"
                 )
         try:
-            await self._stop(now=now, **kwargs)
+            future = self._stop(now=now, **kwargs)
+            await gen.with_timeout(timedelta(seconds=20), future)
+        except AnyTimeoutError:
+            self.log.exception(f"{self._log_name} - timeout")
         except:
             self.log.exception(f"{self._log_name} - Could not stop")
-            pass
         finally:
             if not event:
                 event = await self.get_stop_event()
@@ -1789,7 +1791,11 @@ class ForwardBaseSpawner(Spawner):
                 self.log.exception(f"{self._log_name} - Start function cancelled")
 
         if self.port_forward_info:
-            await self.run_ssh_forward_remove()
+            try:
+                future = self.run_ssh_forward_remove()
+                await gen.with_timeout(timedelta(seconds=20), future)
+            except AnyTimeoutError:
+                self.log.exception(f"{self._log_name} - timeout")
 
     async def cancel_start_function(self):
         # cancel self._start, if it's running
@@ -1798,9 +1804,12 @@ class ForwardBaseSpawner(Spawner):
                 if future._state in ["PENDING"]:
                     try:
                         future.cancel()
-                        await maybe_future(future)
+                        _future = maybe_future(future)
+                        await gen.with_timeout(timedelta(seconds=20), _future)
                     except asyncio.CancelledError:
                         pass
+                    except AnyTimeoutError:
+                        self.log.exception(f"{self._log_name} - timeout")
             else:
                 self.log.debug(f"{self._log_name} - {future} not cancelled.")
 
@@ -1810,14 +1819,20 @@ class ForwardBaseSpawner(Spawner):
             # and not via user.stop. So we want to cleanup the user object
             # as well. It will throw an exception, but we expect the asyncio task
             # to be cancelled, because we've cancelled it ourself.
-            await self.user.stop(self.name)
+            future = self.user.stop(self.name)
+            await gen.with_timeout(timedelta(seconds=5), future)
         except asyncio.CancelledError:
             pass
+        except AnyTimeoutError:
+            self.log.exception(f"{self._log_name} - timeout")
 
         if type(self._spawn_future) is asyncio.Task:
             if self._spawn_future._state in ["PENDING"]:
                 try:
                     self._spawn_future.cancel()
-                    await maybe_future(self._spawn_future)
+                    future = maybe_future(self._spawn_future)
+                    await gen.with_timeout(timedelta(seconds=5), future)
                 except asyncio.CancelledError:
                     pass
+                except AnyTimeoutError:
+                    self.log.exception(f"{self._log_name} - timeout")
