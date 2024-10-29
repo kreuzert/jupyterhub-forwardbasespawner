@@ -1650,7 +1650,7 @@ class ForwardBaseSpawner(Spawner):
                     "ready": False,
                     "progress": 100,
                     "message": "",
-                    "html_message": f"<details><summary>{now}: JupyterLab start failed ({status_code}). {log_message}</summary>{reason}</details>",
+                    "html_message": f"<details><summary>{now}: JupyterLab start failed ({status_code} - {str(e)}). {log_message}</summary>{reason}</details>",
                 }
                 self.latest_events.append(self.stop_event)
                 await self.wait_for_stop_event()
