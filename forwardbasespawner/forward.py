@@ -1768,7 +1768,7 @@ class ForwardBaseSpawner(Spawner):
                 )
         try:
             future = self._stop(now=now, **kwargs)
-            await gen.with_timeout(timedelta(seconds=20), future)
+            await gen.with_timeout(timedelta(seconds=5), future)
         except AnyTimeoutError:
             self.log.exception(f"{self._log_name} - timeout")
         except:
@@ -1793,7 +1793,7 @@ class ForwardBaseSpawner(Spawner):
         if self.port_forward_info:
             try:
                 future = self.run_ssh_forward_remove()
-                await gen.with_timeout(timedelta(seconds=20), future)
+                await gen.with_timeout(timedelta(seconds=5), future)
             except AnyTimeoutError:
                 self.log.exception(f"{self._log_name} - timeout")
 
@@ -1805,7 +1805,7 @@ class ForwardBaseSpawner(Spawner):
                     try:
                         future.cancel()
                         _future = maybe_future(future)
-                        await gen.with_timeout(timedelta(seconds=20), _future)
+                        await gen.with_timeout(timedelta(seconds=5), _future)
                     except asyncio.CancelledError:
                         pass
                     except AnyTimeoutError:
