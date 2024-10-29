@@ -1,4 +1,8 @@
 # Changelog
+## 1.0.6 (2024-10-29)
+
+No changes.
+
 ## 1.0.5 (2024-10-29)
 
 No changes.
