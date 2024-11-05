@@ -68,7 +68,7 @@ class SpawnEventsAPIHandler(APIHandler):
         if event and event.get("failed", False):
             if event.get("html_message", "").endswith(user_cancel_message):
                 self.log.debug(
-                    f"{spawner._log_name} - APICall: SpawnUpdate",
+                    f"{spawner._log_name} - APICall: SpawnUpdate - {event.get('html_message')}",
                     extra={
                         "uuidcode": uuidcode,
                         "log_name": f"{spawner._log_name}",
@@ -94,7 +94,7 @@ class SpawnEventsAPIHandler(APIHandler):
                     await stop
             else:
                 self.log.debug(
-                    f"{spawner._log_name} - APICall: SpawnUpdate",
+                    f"{spawner._log_name} - APICall: SpawnUpdate - {event.get('html_message')}",
                     extra={
                         "uuidcode": uuidcode,
                         "log_name": f"{spawner._log_name}",
@@ -137,7 +137,7 @@ class SpawnEventsAPIHandler(APIHandler):
                 event["html_message"] = event.get("message", "")
 
             self.log.debug(
-                f"{spawner._log_name} - APICall: SpawnUpdate",
+                f"{spawner._log_name} - APICall: SpawnUpdate - {event.get('html_message')}",
                 extra={
                     "uuidcode": uuidcode,
                     "log_name": f"{spawner._log_name}",

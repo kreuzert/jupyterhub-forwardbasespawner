@@ -1738,6 +1738,13 @@ class ForwardBaseSpawner(Spawner):
                     await self.stop(cancel=True)
                     self.run_post_stop_hook()
                     return 0
+        else:
+            # If the remote running service is no longer running, we
+            # call the stop function anyway, to ensure everything
+            # is teared down correctly. Thanks to the "self.already_stopped"
+            # flag, it won't be called twice
+            if status != None:
+                await self.stop(now=True, cancel=True, event=None)
 
         return status
 
