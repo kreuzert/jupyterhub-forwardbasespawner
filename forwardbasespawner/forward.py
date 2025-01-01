@@ -415,6 +415,33 @@ class ForwardBaseSpawner(Spawner):
         """
     ).tag(config=True)
 
+    pre_poll_hook = Any(
+        default_value=False,
+        help="""
+        Hook which allows to run a function before calling poll.
+        Useful when you already know the answer of the upcoming poll
+        call (e.g. information in auth_state is missing).
+        
+        Used return values of the pre_poll_hook:
+        Return True: Unknown status. Call self._poll()
+        Return False: Unknown status. Do not call self._poll(). Server continues as running.
+        Return Integer: That's the exit code. Do not call self._poll()
+        Return None: Server still running. Do not call self._poll()
+        
+        Callable function, may be a coroutine.
+        """,
+    ).tag(config=True)
+
+    async def run_pre_poll_hook(self):
+        if self.pre_poll_hook:
+            ret = self.pre_poll_hook(self)
+            if inspect.isawaitable(ret):
+                ret = await ret
+            self.log.debug(f"{self._log_name} - Pre poll hook return: {ret}")
+            return ret
+        else:
+            return True
+
     update_expected_path = Any(
         default_value=False,
         help="""
@@ -1709,7 +1736,17 @@ class ForwardBaseSpawner(Spawner):
             # avoid loop with stop
             return 0
 
-        status = await self._poll()
+        pre_poll_value = await self.run_pre_poll_hook()
+        if type(pre_poll_value) == bool and pre_poll_value:
+            # Return True: Unknown status. Call self._poll()
+            status = await self._poll()
+        elif type(pre_poll_value) == bool and not pre_poll_value:
+            # Return False: Unknown status. Do not call self._poll(). Server continues as running.
+            status = None
+        else:
+            # Return Integer: That's the exit code. Do not call self._poll()
+            # Return None: Server still running. Do not call self._poll()
+            status = pre_poll_value
 
         if self.call_during_startup:
             self.call_during_startup = False
