@@ -1,4 +1,8 @@
 # Changelog
+## 1.0.8 (2025-01-01)
+
+No changes.
+
 ## 1.0.7 (2024-11-05)
 
 ### added|fixed|changed|deprecated|removed|security|performance|other (1 change)
