@@ -1812,7 +1812,7 @@ class ForwardBaseSpawner(Spawner):
                 )
         try:
             future = self._stop(now=now, **kwargs)
-            await gen.with_timeout(timedelta(seconds=5), future)
+            await gen.with_timeout(timedelta(seconds=10), future)
         except AnyTimeoutError:
             self.log.exception(f"{self._log_name} - timeout")
         except:
@@ -1837,7 +1837,7 @@ class ForwardBaseSpawner(Spawner):
         if self.port_forward_info:
             try:
                 future = self.run_ssh_forward_remove()
-                await gen.with_timeout(timedelta(seconds=5), future)
+                await gen.with_timeout(timedelta(seconds=10), future)
             except AnyTimeoutError:
                 self.log.exception(f"{self._log_name} - timeout")
 
@@ -1849,7 +1849,7 @@ class ForwardBaseSpawner(Spawner):
                     try:
                         future.cancel()
                         _future = maybe_future(future)
-                        await gen.with_timeout(timedelta(seconds=5), _future)
+                        await gen.with_timeout(timedelta(seconds=10), _future)
                     except asyncio.CancelledError:
                         pass
                     except AnyTimeoutError:
@@ -1863,7 +1863,8 @@ class ForwardBaseSpawner(Spawner):
             # and not via user.stop. So we want to cleanup the user object
             # as well. It will throw an exception, but we expect the asyncio task
             # to be cancelled, because we've cancelled it ourself.
-            self._spawn_future.cancel()
+            if self._spawn_future:
+                self._spawn_future.cancel()
             await self.user.stop(self.name)
             if self._spawn_future:
                 await self._spawn_future
