@@ -1859,24 +1859,19 @@ class ForwardBaseSpawner(Spawner):
 
     async def cancel(self):
         try:
-            # If this function was, it was called directly in self.stop
+            # If this function was called, it was called directly in self.stop
             # and not via user.stop. So we want to cleanup the user object
             # as well. It will throw an exception, but we expect the asyncio task
             # to be cancelled, because we've cancelled it ourself.
-            future = self.user.stop(self.name)
-            await gen.with_timeout(timedelta(seconds=5), future)
+            self._spawn_future.cancel()
+            await self.user.stop(self.name)
+            if self._spawn_future:
+                await self._spawn_future
         except asyncio.CancelledError:
             pass
         except AnyTimeoutError:
             self.log.exception(f"{self._log_name} - timeout")
-
-        if type(self._spawn_future) is asyncio.Task:
-            if self._spawn_future._state in ["PENDING"]:
-                try:
-                    self._spawn_future.cancel()
-                    future = maybe_future(self._spawn_future)
-                    await gen.with_timeout(timedelta(seconds=5), future)
-                except asyncio.CancelledError:
-                    pass
-                except AnyTimeoutError:
-                    self.log.exception(f"{self._log_name} - timeout")
+        except:
+            self.log.exception(
+                f"{self._log_name} - Unexpected error during cancelling."
+            )
