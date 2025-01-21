@@ -80,9 +80,11 @@ class ForwardBaseSpawner(Spawner):
     # Keep track if an event with failed=False was yielded
     _cancel_event_yielded = False
 
-    # Store events for max 24h.
-    latest_events = []
-    events = {}
+    # Other elements might want to wait for the cancellation to finish
+    _cancel_wait_event = None
+
+    # Store events for last start_attempt
+    events = []
     yield_wait_seconds = 1
 
     extra_labels = Union(
@@ -639,23 +641,7 @@ class ForwardBaseSpawner(Spawner):
             raise Exception("Server is in the process of stopping, please wait.")
         """Run the pre_spawn_hook if defined"""
 
-        # Save latest events with start event time
-        if self.latest_events != []:
-            try:
-                start_event = self.latest_events[0]
-                start_event_time = self._get_event_time(start_event)
-                self.events[start_event_time] = self.latest_events
-            except:
-                self.log.info(
-                    f"{self._log_name} - Could not retrieve latest_events. Reset events list"
-                )
-                self.latest_events = []
-                self.events = {}
-        self.latest_events = []
-        if type(self.events) != dict:
-            self.events = {}
-        self.events["latest"] = self.latest_events
-
+        self.events = []
         if self.pre_spawn_hook:
             return self.pre_spawn_hook(self)
 
@@ -731,24 +717,6 @@ class ForwardBaseSpawner(Spawner):
         state["port_forward_info"] = copy.deepcopy(self.port_forward_info)
         state["custom_port"] = self.port
         state["start_id"] = self.start_id
-        if self.events:
-            if type(self.events) != dict:
-                self.events = {}
-            self.events["latest"] = self.latest_events
-            # Clear logs older than 24h or empty logs
-            events_keys = copy.deepcopy(list(self.events.keys()))
-            for key in events_keys:
-                value = self.events.get(key, None)
-                if value and len(value) > 0 and value[0]:
-                    stime = self._get_event_time(value[0])
-                    dtime = datetime.strptime(stime, "%Y-%m-%d %H:%M:%S")
-                    now = datetime.now()
-                    delta = now - dtime
-                    if delta.days:
-                        del self.events[key]
-                else:  # empty logs
-                    del self.events[key]
-            state["events"] = self.events
         return state
 
     def load_state(self, state):
@@ -756,10 +724,6 @@ class ForwardBaseSpawner(Spawner):
         super().load_state(state)
         if "port_forward_info" in state:
             self.port_forward_info = copy.deepcopy(state["port_forward_info"])
-        if "events" in state:
-            self.events = state["events"]
-            if "latest" in self.events:
-                self.latest_events = self.events["latest"]
         if "custom_port" in state:
             self.custom_port = state["custom_port"]
         if "start_id" in state:
@@ -775,7 +739,6 @@ class ForwardBaseSpawner(Spawner):
         self.already_post_stop_hooked = False
         self.start_id = ""
         self._cancel_event_yielded = False
-        self.latest_events = []
 
     show_first_default_event = Any(
         default_value=True,
@@ -826,11 +789,14 @@ class ForwardBaseSpawner(Spawner):
             if spawn_future.done():
                 break_while_loop = True
 
-            len_events = len(self.latest_events)
+            len_events = len(self.events)
             if next_event < len_events:
                 for i in range(next_event, len_events):
-                    yield self.latest_events[i]
-                    if self.latest_events[i].get("failed", False) == True:
+                    yield self.events[i]
+                    if (
+                        len(self.events) > i
+                        and self.events[i].get("failed", False) == True
+                    ):
                         self._cancel_event_yielded = True
                         break_while_loop = True
                 next_event = len_events
@@ -1679,7 +1645,7 @@ class ForwardBaseSpawner(Spawner):
                     "message": "",
                     "html_message": f"<details><summary>{now}: JupyterLab start failed ({status_code} - {str(e)}). {log_message}</summary>{reason}</details>",
                 }
-                self.latest_events.append(self.stop_event)
+                self.events.append(self.stop_event)
                 await self.wait_for_stop_event()
                 raise e
 
@@ -1801,18 +1767,13 @@ class ForwardBaseSpawner(Spawner):
         self.already_stopped = True
 
         if cancel:
+            self._cancel_wait_event = asyncio.Event()
             # If self._start is still running we cancel it here
             cancelling_event = await self.get_cancelling_event()
-            self.latest_events.append(cancelling_event)
-            try:
-                await self.cancel_start_function()
-            except:
-                self.log.exception(
-                    f"{self._log_name} - Start wrapper function cancelled"
-                )
+            self.events.append(cancelling_event)
+            await self.cancel_start_function()
         try:
-            future = self._stop(now=now, **kwargs)
-            await gen.with_timeout(timedelta(seconds=10), future)
+            await self._stop(now=now, **kwargs)
         except AnyTimeoutError:
             self.log.exception(f"{self._log_name} - timeout")
         except:
@@ -1822,7 +1783,7 @@ class ForwardBaseSpawner(Spawner):
                 event = await self.get_stop_event()
             elif callable(event):
                 event = await maybe_future(event(self))
-            self.latest_events.append(event)
+            self.events.append(event)
             await self.wait_for_stop_event()
 
         # We've implemented a cancel feature, which allows us to call
@@ -1843,19 +1804,17 @@ class ForwardBaseSpawner(Spawner):
 
     async def cancel_start_function(self):
         # cancel self._start, if it's running
-        for future in [self._start_future_response, self._start_future]:
+        for future in [self._start_future, self._start_future_response]:
             if future and type(future) is asyncio.Task:
                 if future._state in ["PENDING"]:
                     try:
                         future.cancel()
-                        _future = maybe_future(future)
-                        await gen.with_timeout(timedelta(seconds=10), _future)
                     except asyncio.CancelledError:
                         pass
-                    except AnyTimeoutError:
-                        self.log.exception(f"{self._log_name} - timeout")
-            else:
-                self.log.debug(f"{self._log_name} - {future} not cancelled.")
+                    except:
+                        self.log.exception(
+                            f"{self._log_name} - Unexpected error during cancelling."
+                        )
 
     async def cancel(self):
         try:
@@ -1863,16 +1822,19 @@ class ForwardBaseSpawner(Spawner):
             # and not via user.stop. So we want to cleanup the user object
             # as well. It will throw an exception, but we expect the asyncio task
             # to be cancelled, because we've cancelled it ourself.
-            if self._spawn_future:
-                self._spawn_future.cancel()
             await self.user.stop(self.name)
-            if self._spawn_future:
-                await self._spawn_future
         except asyncio.CancelledError:
             pass
-        except AnyTimeoutError:
-            self.log.exception(f"{self._log_name} - timeout")
         except:
             self.log.exception(
                 f"{self._log_name} - Unexpected error during cancelling."
             )
+
+        if type(self._spawn_future) is asyncio.Task:
+            if self._spawn_future._state in ["PENDING"]:
+                try:
+                    self._spawn_future.cancel()
+                except asyncio.CancelledError:
+                    pass
+        if self._cancel_wait_event:
+            self._cancel_wait_event.set()

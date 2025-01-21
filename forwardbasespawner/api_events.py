@@ -28,7 +28,7 @@ class SpawnEventsAPIHandler(APIHandler):
             raise web.HTTPError(404)
         spawner = user.spawners[server_name]
         data = {
-            "events": spawner.latest_events,
+            "events": spawner.events,
             "active": spawner.active,
             "ready": spawner.ready,
         }
@@ -92,6 +92,8 @@ class SpawnEventsAPIHandler(APIHandler):
                 stop = spawner.stop(cancel=True, event=stop_event)
                 if inspect.isawaitable(stop):
                     await stop
+                if spawner._cancel_wait_event:
+                    await spawner._cancel_wait_event.wait()
             else:
                 self.log.debug(
                     f"{spawner._log_name} - APICall: SpawnUpdate - {event.get('html_message')}",
@@ -106,6 +108,8 @@ class SpawnEventsAPIHandler(APIHandler):
                 stop = spawner.stop(cancel=True, event=event)
                 if inspect.isawaitable(stop):
                     await stop
+                if spawner._cancel_wait_event:
+                    await spawner._cancel_wait_event.wait()
             self.set_header("Content-Type", "text/plain")
             self.set_status(204)
             return
@@ -147,8 +151,8 @@ class SpawnEventsAPIHandler(APIHandler):
                 },
             )
             spawner = user.spawners[server_name]
-            if hasattr(spawner, "latest_events"):
-                spawner.latest_events.append(event)
+            if hasattr(spawner, "events") and type(spawner.events) == list:
+                spawner.events.append(event)
             self.set_header("Content-Type", "text/plain")
             self.set_status(204)
             return
