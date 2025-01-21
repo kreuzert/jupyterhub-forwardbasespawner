@@ -8,10 +8,6 @@ from jupyterhub.apihandlers.base import APIHandler
 from jupyterhub.scopes import needs_scope
 from tornado import web
 
-user_cancel_message = (
-    "Start cancelled by user.</summary>You clicked the cancel button.</details>"
-)
-
 
 class SpawnEventsAPIHandler(APIHandler):
     def check_xsrf_cookie(self):
@@ -66,50 +62,21 @@ class SpawnEventsAPIHandler(APIHandler):
             return
 
         if event and event.get("failed", False):
-            if event.get("html_message", "").endswith(user_cancel_message):
-                self.log.debug(
-                    f"{spawner._log_name} - APICall: SpawnUpdate - {event.get('html_message')}",
-                    extra={
-                        "uuidcode": uuidcode,
-                        "log_name": f"{spawner._log_name}",
-                        "user": user_name,
-                        "action": "cancel",
-                        "event": event,
-                    },
-                )
-
-                # Add correct timestamp to event, at the moment it will be used.
-                async def stop_event(spawner):
-                    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                    return {
-                        "failed": True,
-                        "ready": False,
-                        "progress": 100,
-                        "message": "",
-                        "html_message": f"<details><summary>{now}: {user_cancel_message}",
-                    }
-
-                stop = spawner.stop(cancel=True, event=stop_event)
-                if inspect.isawaitable(stop):
-                    await stop
-                if spawner._cancel_wait_event:
-                    await spawner._cancel_wait_event.wait()
-            else:
-                self.log.debug(
-                    f"{spawner._log_name} - APICall: SpawnUpdate - {event.get('html_message')}",
-                    extra={
-                        "uuidcode": uuidcode,
-                        "log_name": f"{spawner._log_name}",
-                        "user": user_name,
-                        "action": "failed",
-                        "event": event,
-                    },
-                )
-                stop = spawner.stop(cancel=True, event=event)
-                if inspect.isawaitable(stop):
-                    await stop
-                if spawner._cancel_wait_event:
-                    await spawner._cancel_wait_event.wait()
+            self.log.debug(
+                f"{spawner._log_name} - APICall: SpawnUpdate - {event.get('html_message')}",
+                extra={
+                    "uuidcode": uuidcode,
+                    "log_name": f"{spawner._log_name}",
+                    "user": user_name,
+                    "action": "failed",
+                    "event": event,
+                },
+            )
+            stop = spawner.stop(cancel=True, event=event)
+            if inspect.isawaitable(stop):
+                await stop
+            if spawner._cancel_wait_event:
+                await spawner._cancel_wait_event.wait()
             self.set_header("Content-Type", "text/plain")
             self.set_status(204)
             return

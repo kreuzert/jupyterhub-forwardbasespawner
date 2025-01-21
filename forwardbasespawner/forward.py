@@ -717,6 +717,7 @@ class ForwardBaseSpawner(Spawner):
         state["port_forward_info"] = copy.deepcopy(self.port_forward_info)
         state["custom_port"] = self.port
         state["start_id"] = self.start_id
+        state["events"] = self.events
         return state
 
     def load_state(self, state):
@@ -728,6 +729,8 @@ class ForwardBaseSpawner(Spawner):
             self.custom_port = state["custom_port"]
         if "start_id" in state:
             self.start_id = state["start_id"]
+        if "events" in state:
+            self.events = state["events"]
 
     def clear_state(self):
         """clear any state (called after shutdown)"""
@@ -739,6 +742,7 @@ class ForwardBaseSpawner(Spawner):
         self.already_post_stop_hooked = False
         self.start_id = ""
         self._cancel_event_yielded = False
+        self.events = []
 
     show_first_default_event = Any(
         default_value=True,
