@@ -72,11 +72,13 @@ class SpawnEventsAPIHandler(APIHandler):
                     "event": event,
                 },
             )
+            spawner._cancel_pending = True
             stop = spawner.stop(cancel=True, event=event)
             if inspect.isawaitable(stop):
                 await stop
             if spawner._cancel_wait_event:
                 await spawner._cancel_wait_event.wait()
+            spawner._cancel_pending = False
             self.set_header("Content-Type", "text/plain")
             self.set_status(204)
             return

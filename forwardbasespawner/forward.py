@@ -82,10 +82,19 @@ class ForwardBaseSpawner(Spawner):
 
     # Other elements might want to wait for the cancellation to finish
     _cancel_wait_event = None
+    _cancel_pending = False
 
     # Store events for last start_attempt
     events = []
     yield_wait_seconds = 1
+
+    @property
+    def cancel_pending(self):
+        """
+        This property is managed by api_events.py. It can be used by the frontend,
+        to check whether a Server is currently cancelling the ongoing start.
+        """
+        return self._cancel_pending
 
     extra_labels = Union(
         [Dict(default_value={}), Callable()],
@@ -641,6 +650,7 @@ class ForwardBaseSpawner(Spawner):
             raise Exception("Server is in the process of stopping, please wait.")
         """Run the pre_spawn_hook if defined"""
 
+        self._cancel_pending = False
         self.events = []
         if self.pre_spawn_hook:
             return self.pre_spawn_hook(self)
