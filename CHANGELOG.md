@@ -1,4 +1,8 @@
 # Changelog
+## 1.1.1 (2025-01-21)
+
+No changes.
+
 ## 1.1.0 (2025-01-21)
 
 No changes.
