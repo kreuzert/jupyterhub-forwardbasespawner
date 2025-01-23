@@ -752,7 +752,6 @@ class ForwardBaseSpawner(Spawner):
         self.already_post_stop_hooked = False
         self.start_id = ""
         self._cancel_event_yielded = False
-        self.events = []
 
     show_first_default_event = Any(
         default_value=True,
