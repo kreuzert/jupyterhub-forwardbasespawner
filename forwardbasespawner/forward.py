@@ -102,9 +102,9 @@ class ForwardBaseSpawner(Spawner):
         An optional hook function, or dict, you can implement to add
         extra labels to the service created when using port-forwarding.
         Will also be forwarded to the Outpost service (see self.custom_misc_disable_default)
-        
+
         This may be a coroutine.
-        
+
         Example::
 
             def extra_labels(spawner):
@@ -114,7 +114,7 @@ class ForwardBaseSpawner(Spawner):
                     "sidecar.istio.io/inject": "false"
                 }
                 return labels
-            
+
             c.ForwardBaseSpawner.extra_labels = extra_labels
         """,
     ).tag(config=True)
@@ -125,15 +125,15 @@ class ForwardBaseSpawner(Spawner):
         help="""
         An optional hook function, or dict, you can implement to define
         a port depending on the spawner object.
-        
+
         Example::
-        
+
             from jupyterhub.utils import random_potr
             def custom_port(spawner, user_options):
                 if user_options.get("system", "") == "A":
                     return 8080
                 return random_port()
-            
+
             c.OutpostSpawner.custom_port = custom_port
         """,
     ).tag(config=True)
@@ -162,7 +162,7 @@ class ForwardBaseSpawner(Spawner):
         If you have outsourced the port forwarding to an extra pod, you can
         set this to false. Outsourcing also means, that connections to running
         JupyterLabs are not affected by JupyterHub restarts.
-        
+
         This may be a coroutine.
         """,
     ).tag(config=True)
@@ -174,8 +174,8 @@ class ForwardBaseSpawner(Spawner):
         An optional hook function, or boolean, you can implement to
         decide whether a ssh port forwarding process should be run after
         the POST request to the JupyterHub Outpost service.
-        
-        Common Use Case: 
+
+        Common Use Case:
         singleuser service was started remotely and is not accessible by
         JupyterHub (e.g. it's running on a different K8s Cluster), but you
         know exactly where it is (e.g. the service address).
@@ -415,7 +415,7 @@ class ForwardBaseSpawner(Spawner):
     ssh_custom_forward_remote = Any(
         help="""
         An optional hook function you can implement to create your own
-        ssh port forwarding from remote system to hub. 
+        ssh port forwarding from remote system to hub.
         """
     ).tag(config=True)
 
@@ -432,13 +432,13 @@ class ForwardBaseSpawner(Spawner):
         Hook which allows to run a function before calling poll.
         Useful when you already know the answer of the upcoming poll
         call (e.g. information in auth_state is missing).
-        
+
         Used return values of the pre_poll_hook:
         Return True: Unknown status. Call self._poll()
         Return False: Unknown status. Do not call self._poll(). Server continues as running.
         Return Integer: That's the exit code. Do not call self._poll()
         Return None: Server still running. Do not call self._poll()
-        
+
         Callable function, may be a coroutine.
         """,
     ).tag(config=True)
@@ -456,8 +456,9 @@ class ForwardBaseSpawner(Spawner):
     update_expected_path = Any(
         default_value=False,
         help="""
-        Hook which allows to update the return value of Spawner.start().
-        
+        Hook which allows to update the return value of Spawner.start().after starting ssh forwards.
+        Result used by JupyterHub to look for Jupyter Server
+
         Callable function, may be a coroutine.
         """,
     ).tag(config=True)
@@ -471,13 +472,31 @@ class ForwardBaseSpawner(Spawner):
         else:
             return default_start_return_value
 
+    update_start_response = Any(
+        default_value=False,
+        help="""
+        Hook which allows to update the return value of Spawner.start() before starting ssh forwards..
+
+        Callable function, may be a coroutine.
+        """,
+    ).tag(config=True)
+
+    async def run_update_start_response(self, original_start_response):
+        if self.update_start_response:
+            start_response = self.update_start_response(self, original_start_response)
+            if inspect.isawaitable(start_response):
+                start_response = await start_response
+            return start_response
+        else:
+            return original_start_response
+
     ssh_create_remote_forward = Any(
         default_value=False,
         help="""
-        Whether a port forwarding process from a remote system to the hub is 
+        Whether a port forwarding process from a remote system to the hub is
         required or not. The remote system must be prepared properly to support
-        this feature. 
-        
+        this feature.
+
         Must be a boolean or a callable function
         """,
     ).tag(config=True)
@@ -497,9 +516,9 @@ class ForwardBaseSpawner(Spawner):
         help="""
         An optional hook function you can implement to create your own
         ssh port forwarding called in the start function. This can be
-        used to use an external pod for the port forwarding instead of 
+        used to use an external pod for the port forwarding instead of
         having JupyterHub handle it.
-        
+
         Example::
 
             from tornado.httpclient import HTTPRequest
@@ -512,7 +531,7 @@ class ForwardBaseSpawner(Spawner):
                     url=url,
                     method="POST",
                     headers=headers,
-                    body=json.dumps(port_forward_info),                    
+                    body=json.dumps(port_forward_info),
                 )
                 await spawner.send_request(
                     req, action="setuptunnel"
@@ -526,8 +545,8 @@ class ForwardBaseSpawner(Spawner):
     ssh_custom_forward_remove = Any(
         help="""
         An optional hook function you can implement to remove your own
-        ssh port forwarding called in the stop function. This can be 
-        used to use an external pod for the port forwarding instead of 
+        ssh port forwarding called in the stop function. This can be
+        used to use an external pod for the port forwarding instead of
         having JupyterHub handle it.
 
         Example::
@@ -542,7 +561,7 @@ class ForwardBaseSpawner(Spawner):
                     url=url,
                     method="DELETE",
                     headers=headers,
-                    body=json.dumps(port_forward_info),                    
+                    body=json.dumps(port_forward_info),
                 )
                 await spawner.send_request(
                     req, action="removetunnel"
@@ -556,8 +575,8 @@ class ForwardBaseSpawner(Spawner):
     ssh_custom_svc = Any(
         help="""
         An optional hook function you can implement to create a customized
-        kubernetes svc called in the start function. 
-        
+        kubernetes svc called in the start function.
+
         Example::
 
             def ssh_custom_svc(spawner, port_forward_info):
@@ -572,8 +591,8 @@ class ForwardBaseSpawner(Spawner):
     ssh_custom_svc_remove = Any(
         help="""
         An optional hook function you can implement to remove a customized
-        kubernetes svc called in the stop function. 
-        
+        kubernetes svc called in the stop function.
+
         Example::
 
             def ssh_custom_svc_remove(spawner, port_forward_info):
@@ -591,7 +610,7 @@ class ForwardBaseSpawner(Spawner):
         An optional hook, or dict, to configure the ssh commands used in the
         spawner.ssh_default_forward function. The default configuration parameters
         (see below) can be overridden.
-        
+
         Default::
 
             ssh_forward_options_all = {
@@ -602,8 +621,8 @@ class ForwardBaseSpawner(Spawner):
                 "Port": str(ssh_port),
                 "ControlPath": f"/tmp/control_{ssh_address_or_host}",
                 "IdentityFile": ssh_pkey,
-            }        
-        
+            }
+
         """,
     ).tag(config=True)
 
@@ -622,15 +641,15 @@ class ForwardBaseSpawner(Spawner):
         An optional hook, or dict, to configure the ssh commands used in the
         spawner.ssh_default_forward function. The default configuration parameters
         (see below) can be overriden.
-        
+
         Default::
 
             ssh_forward_remote_options_all = {
                 "StrictHostKeyChecking": "accept-new",
                 "Port": str(ssh_port),
                 "ControlPath": f"/tmp/control_{ssh_address_or_host}",
-            }        
-        
+            }
+
         """,
     ).tag(config=True)
 
@@ -757,7 +776,7 @@ class ForwardBaseSpawner(Spawner):
         default_value=True,
         help="""
         Hook to define if the default event at 0% should be shown.
-        
+
         Can be a boolean or a callable function.
         This may be a coroutine.
         """,
@@ -825,7 +844,7 @@ class ForwardBaseSpawner(Spawner):
         Different JupyterHub single-user servers may send different events.
         This filter allows you to unify all events. Should always return a dict.
         If the dict should not be shown, return an empty dict.
-                
+
         Example::
 
             def custom_filter_events(spawner, event):
@@ -853,9 +872,9 @@ class ForwardBaseSpawner(Spawner):
         help="""
         Event shown when a singleuser server was cancelled.
         Can be a function or a dict.
-        
+
         This may be a coroutine.
-        
+
         Example::
 
             from datetime import datetime
@@ -868,7 +887,7 @@ class ForwardBaseSpawner(Spawner):
                     "message": "",
                     "html_message": f"<details><summary>{now}: Cancelling start ...</summary>We're stopping the start process.</details>",
                 }
-        
+
             c.ForwardBaseSpawner.cancelling_event = cancel_click_event
         """,
     ).tag(config=True)
@@ -1663,6 +1682,7 @@ class ForwardBaseSpawner(Spawner):
                 raise e
 
             self.log.info(f"{self._log_name} - Start response: {resp}")
+            resp = await self.run_update_start_response(resp)
             resp_json = {"service": resp}
 
             """
@@ -1851,3 +1871,4 @@ class ForwardBaseSpawner(Spawner):
                     pass
         if self._cancel_wait_event:
             self._cancel_wait_event.set()
+
