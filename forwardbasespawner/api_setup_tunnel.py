@@ -17,8 +17,11 @@ class SetupTunnelAPIHandler(APIHandler):
         user = self.find_user(user_name)
         if user is None:
             # no such user
+            self.log.info(f"User {user_name} not found")
             raise web.HTTPError(404)
+        self.db.refresh(user)
         if server_name not in user.spawners:
+            self.log.info(f"Server {user_name}:{server_name} not found")
             # user has no such server
             raise web.HTTPError(404)
         body = self.request.body.decode("utf8")

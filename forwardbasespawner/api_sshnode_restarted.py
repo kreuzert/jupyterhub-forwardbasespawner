@@ -1,4 +1,4 @@
-import json
+import asyncio
 
 from jupyterhub import orm
 from jupyterhub.apihandlers import APIHandler
@@ -23,7 +23,7 @@ class SSHNodeRestartedAPIHandler(APIHandler):
     def check_xsrf_cookie(self):
         pass
 
-    async def recreate_processes(self):
+    async def recreate_processes(self, ssh_node):
         query = (
             self.db.query(orm.Spawner)
             .filter(orm.Spawner.server != None)
@@ -32,7 +32,7 @@ class SSHNodeRestartedAPIHandler(APIHandler):
         servers = [
             (x.user_id, x.name)
             for x in query
-            if x.state.get("port_forward_info", {}).get("ssh_node", "") == ssh_node
+            if x.user_options.get("system", "") == ssh_node
         ]
         for x in servers:
             try:
@@ -53,7 +53,7 @@ class SSHNodeRestartedAPIHandler(APIHandler):
     @token_authenticated
     async def get(self, ssh_node):
         check_custom_scopes(self)
-        asyncio.create_task(self.recreate_processes())
+        asyncio.create_task(self.recreate_processes(ssh_node))
         self.set_status(202)
         return
 
