@@ -1799,13 +1799,14 @@ class ForwardBaseSpawner(Spawner):
         # Prevent multiple requests to the outpost
         self.already_stopped = True
 
-        try:
-            await self.user.authenticator.refresh_user(self.user, None, force=True)
-        except TypeError as e:
-            if "unexpected keyword argument 'force'" in str(e):
-                await self.user.authenticator.refresh_user(self.user, None)
-            else:
-                raise
+        if hasattr(self.user, 'authenticator') and hasattr(self.user.authenticator, 'refresh_user'):
+            try:
+                await self.user.authenticator.refresh_user(self.user, None, force=True)
+            except TypeError as e:
+                if "unexpected keyword argument 'force'" in str(e):
+                    await self.user.authenticator.refresh_user(self.user, None)
+                else:
+                    raise
 
         if cancel:
             self._cancel_wait_event = asyncio.Event()
