@@ -1,11 +1,10 @@
-from jupyterhub.scopes import _check_scope_access
 from tornado.web import HTTPError
 
 
 def check_custom_scopes(handler):
     allowed = False
     for scope in handler.required_scopes:
-        if _check_scope_access(handler, scope):
+        if handler.has_scope(scope):
             allowed = True
             continue
     if not allowed:

@@ -2,19 +2,21 @@ import asyncio
 import copy
 import inspect
 import os
-import re
 import string
 import subprocess
-import time
 import traceback
 import uuid
+import sys
 from datetime import datetime
 from datetime import timedelta
 from functools import lru_cache
 from urllib.parse import urlparse
 
 import escapism
-from async_generator import aclosing
+if sys.version_info >= (3, 10):
+    from contextlib import aclosing
+else:
+    from async_generator import aclosing
 from jupyterhub.spawner import Spawner
 from jupyterhub.utils import AnyTimeoutError
 from jupyterhub.utils import maybe_future
@@ -78,23 +80,12 @@ class ForwardBaseSpawner(Spawner):
     already_post_stop_hooked = False
 
     # Keep track if an event with failed=False was yielded
-    _cancel_event_yielded = False
-
-    # Other elements might want to wait for the cancellation to finish
-    _cancel_wait_event = None
-    _cancel_pending = False
+    _stop_pending_event = None
 
     # Store events for last start_attempt
     events = []
+    last_event = {}
     yield_wait_seconds = 1
-
-    @property
-    def cancel_pending(self):
-        """
-        This property is managed by api_events.py. It can be used by the frontend,
-        to check whether a Server is currently cancelling the ongoing start.
-        """
-        return self._cancel_pending
 
     extra_labels = Union(
         [Dict(default_value={}), Callable()],
@@ -664,30 +655,6 @@ class ForwardBaseSpawner(Spawner):
             ssh_forward_remote_options = self.ssh_forward_remote_options
         return ssh_forward_remote_options
 
-    def run_pre_spawn_hook(self):
-        if self.already_stopped:
-            raise Exception("Server is in the process of stopping, please wait.")
-        """Run the pre_spawn_hook if defined"""
-
-        self._cancel_pending = False
-        self.events = []
-        if self.pre_spawn_hook:
-            return self.pre_spawn_hook(self)
-
-    def run_post_stop_hook(self):
-        if self.already_post_stop_hooked:
-            return
-        self.already_post_stop_hooked = True
-
-        """Run the post_stop_hook if defined"""
-        if self.post_stop_hook is not None:
-            try:
-                return self.post_stop_hook(self)
-            except Exception as e:
-                self.log.exception(
-                    f"{self._log_name} - post_stop_hook failed with exception"
-                )
-
     def get_env(self):
         """Get customized environment variables
 
@@ -764,13 +731,13 @@ class ForwardBaseSpawner(Spawner):
     def clear_state(self):
         """clear any state (called after shutdown)"""
         super().clear_state()
-        self._start_future = None
-        self._start_future_response = None
         self.port_forward_info = {}
         self.already_stopped = False
         self.already_post_stop_hooked = False
         self.start_id = ""
-        self._cancel_event_yielded = False
+        if self._stop_pending_event:
+            self._stop_pending_event.set()
+        # self.last_event = {}
 
     show_first_default_event = Any(
         default_value=True,
@@ -829,7 +796,6 @@ class ForwardBaseSpawner(Spawner):
                         len(self.events) > i
                         and self.events[i].get("failed", False) == True
                     ):
-                        self._cancel_event_yielded = True
                         break_while_loop = True
                 next_event = len_events
 
@@ -904,36 +870,6 @@ class ForwardBaseSpawner(Spawner):
         else:
             cancelling_event = self.cancelling_event
         return cancelling_event
-
-    stop_event = Union(
-        [Dict(), Callable()],
-        default_value={
-            "failed": True,
-            "ready": False,
-            "progress": 100,
-            "message": "",
-            "html_message": "JupyterLab was stopped.",
-        },
-        help="""
-        Event shown when single-user server was stopped.
-        """,
-    ).tag(config=True)
-
-    async def get_stop_event(self):
-        if callable(self.stop_event):
-            stop_event = await maybe_future(self.stop_event(self))
-        else:
-            stop_event = self.stop_event
-        return stop_event
-
-    def _get_event_time(self, event):
-        # Regex for date time
-        pattern = re.compile(
-            r"([0-9]+(-[0-9]+)+).*[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,3})?"
-        )
-        message = event["html_message"]
-        match = re.search(pattern, message)
-        return match.group()
 
     async def get_ssh_recreate_at_start(self):
         """Get ssh_recreate_at_start
@@ -1502,8 +1438,6 @@ class ForwardBaseSpawner(Spawner):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._start_future = None
-        self._start_future_response = None
         self.svc_name = self._expand_user_properties(self.svc_name_template)
         self.dns_name = self.dns_name_template.format(
             namespace=self.namespace, name=self.svc_name
@@ -1622,110 +1556,98 @@ class ForwardBaseSpawner(Spawner):
         # k8s object names cannot have trailing -
         return rendered.rstrip("-")
 
-    async def wait_for_stop_event(self):
-        # Wait up to 5 times yield_wait_seconds, before sending stop event to frontend
-        stopwait = time.monotonic() + 5 * self.yield_wait_seconds
-        while time.monotonic() < stopwait:
-            if self._cancel_event_yielded:
-                break
-            await asyncio.sleep(2 * self.yield_wait_seconds)
-        return
-
-    def start(self):
-        # Wrapper around self._start
-        # Can be used to cancel start progress while waiting for it's response
-
+    async def start(self):
         self.call_during_startup = False
+        self._stop_pending_event = asyncio.Event()
+
+        self.events = []
+        self.last_event = {}
         if not getattr(self, "start_id", ""):
             self.start_id = uuid.uuid4().hex
 
-        async def call_subclass_start(self):
-            if self.port == 0:
-                self.custom_port = random_port()
+        if self.port == 0:
+            self.custom_port = random_port()
 
-            create_ssh_remote_forward = await self.get_ssh_create_remote_forward()
-            if create_ssh_remote_forward:
-                try:
-                    if self.ssh_custom_forward_remote:
-                        port_forward_remote = self.ssh_custom_forward_remote(
-                            self, self.ssh_custom_forward_remote
-                        )
-                        if inspect.isawaitable(port_forward_remote):
-                            await port_forward_remote
-                    else:
-                        await self.ssh_default_forward_remote()
-                except Exception as e:
-                    raise web.HTTPError(
-                        419,
-                        log_message=f"Cannot start remote ssh tunnel for {self._log_name}: {str(e)}",
-                    )
-
-            self._start_future = asyncio.ensure_future(self._start())
+        create_ssh_remote_forward = await self.get_ssh_create_remote_forward()
+        if create_ssh_remote_forward:
             try:
-                resp = await self._start_future
-            except Exception as e:
-                status_code = getattr(e, "status_code", 500)
-                reason = getattr(e, "reason", traceback.format_exc()).replace(
-                    "\n", "<br>"
-                )
-                log_message = getattr(e, "log_message", "")
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                self.stop_event = {
-                    "failed": True,
-                    "ready": False,
-                    "progress": 100,
-                    "message": "",
-                    "html_message": f"<details><summary>{now}: JupyterLab start failed ({status_code} - {str(e)}). {log_message}</summary>{reason}</details>",
-                }
-                self.events.append(self.stop_event)
-                await self.wait_for_stop_event()
-                raise e
-
-            self.log.info(f"{self._log_name} - Start response: {resp}")
-            resp = await self.run_update_start_response(resp)
-            resp_json = {"service": resp}
-
-            """
-            There are 3 possible scenarios for remote singleuser servers:
-            1. Reachable by JupyterHub (e.g. Outpost service running on same cluster)
-            2. Port forwarding required, and we know the service_address (e.g. Outpost service running on remote cluster)
-            3. Port forwarding required, but we don't know the service_address yet (e.g. start on a batch system)
-            """
-            if self.internal_ssl:
-                proto = "https://"
-            else:
-                proto = "http://"
-            port = self.port
-            ssh_during_startup = self.get_ssh_during_startup()
-            if ssh_during_startup:
-                # Case 2: Create port forwarding to service_address given by Outpost service.
-
-                # Store port_forward_info, required for port forward removal
-                self.port_forward_info = resp_json
-                svc_name, port = await maybe_future(self.run_ssh_forward())
-                ret = f"{proto}{svc_name}:{port}"
-            else:
-                if not resp_json.get("service", ""):
-                    # Case 3: service_address not known yet.
-                    # Wait for service at default address. The singleuser server itself
-                    # has to call the SetupTunnel API with it's actual location.
-                    # This will trigger the delayed port forwarding.
-                    ret = f"{proto}{self.svc_name}:{self.port}"
-                else:
-                    # Case 1: No port forward required, just connect to given service_address
-                    service_address, port = self.split_service_address(
-                        resp_json.get("service")
+                if self.ssh_custom_forward_remote:
+                    port_forward_remote = self.ssh_custom_forward_remote(
+                        self, self.ssh_custom_forward_remote
                     )
-                    ret = f"{proto}{service_address}:{port}"
+                    if inspect.isawaitable(port_forward_remote):
+                        await port_forward_remote
+                else:
+                    await self.ssh_default_forward_remote()
+            except Exception as e:
+                raise web.HTTPError(
+                    419,
+                    log_message=f"Cannot start remote ssh tunnel for {self._log_name}: {str(e)}",
+                )
 
-            # Port may have changed in port forwarding or by remote Outpost service.
-            self.custom_port = int(port)
-            ret = await self.run_update_expected_path(ret)
-            self.log.info(f"{self._log_name} - Expect JupyterLab at {ret}")
-            return ret
+        self._sub_spawn_future = asyncio.ensure_future(self._start())
+        try:
+            resp = await self._sub_spawn_future
+        except Exception as e:
+            status_code = getattr(e, "status_code", 500)
+            reason = getattr(e, "reason", traceback.format_exc()).replace(
+                "\n", "<br>"
+            )
+            log_message = getattr(e, "log_message", "")
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            self.last_event = {
+                "failed": True,
+                "ready": False,
+                "progress": 100,
+                "message": "",
+                "html_message": f"<details><summary>{now}: JupyterLab start failed ({status_code} - {str(e)}). {log_message}</summary>{reason}</details>",
+            }
+            self.events.append(self.last_event)
+            raise e
 
-        self._start_future_response = asyncio.ensure_future(call_subclass_start(self))
-        return self._start_future_response
+        self.log.info(f"{self._log_name} - Start response: {resp}")
+        resp = await self.run_update_start_response(resp)
+        resp_json = {"service": resp}
+
+        """
+        There are 3 possible scenarios for remote singleuser servers:
+        1. Reachable by JupyterHub (e.g. Outpost service running on same cluster)
+        2. Port forwarding required, and we know the service_address (e.g. Outpost service running on remote cluster)
+        3. Port forwarding required, but we don't know the service_address yet (e.g. start on a batch system)
+        """
+        if self.internal_ssl:
+            proto = "https://"
+        else:
+            proto = "http://"
+        port = self.port
+        ssh_during_startup = self.get_ssh_during_startup()
+        if ssh_during_startup:
+            # Case 2: Create port forwarding to service_address given by Outpost service.
+
+            # Store port_forward_info, required for port forward removal
+            self.port_forward_info = resp_json
+            svc_name, port = await maybe_future(self.run_ssh_forward())
+            ret = f"{proto}{svc_name}:{port}"
+        else:
+            if not resp_json.get("service", ""):
+                # Case 3: service_address not known yet.
+                # Wait for service at default address. The singleuser server itself
+                # has to call the SetupTunnel API with it's actual location.
+                # This will trigger the delayed port forwarding.
+                ret = f"{proto}{self.svc_name}:{self.port}"
+            else:
+                # Case 1: No port forward required, just connect to given service_address
+                service_address, port = self.split_service_address(
+                    resp_json.get("service")
+                )
+                ret = f"{proto}{service_address}:{port}"
+
+        # Port may have changed in port forwarding or by remote Outpost service.
+        self.custom_port = int(port)
+        ret = await self.run_update_expected_path(ret)
+        self.log.info(f"{self._log_name} - Expect JupyterLab at {ret}")
+        return ret
+
 
     async def _start(self):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
@@ -1753,7 +1675,7 @@ class ForwardBaseSpawner(Spawner):
 
             if status != None:
                 try:
-                    await self.stop(cancel=True)
+                    await self.stop()
                 except:
                     self.log.exception(f"{self._log_name} - Could not stop")
                 try:
@@ -1771,7 +1693,7 @@ class ForwardBaseSpawner(Spawner):
                         f"{self._log_name} - Could not recreate ssh tunnel during startup. Stop server"
                     )
                     self.call_during_startup = False
-                    await self.stop(cancel=True)
+                    await self.stop()
                     self.run_post_stop_hook()
                     return 0
         else:
@@ -1780,7 +1702,7 @@ class ForwardBaseSpawner(Spawner):
             # is teared down correctly. Thanks to the "self.already_stopped"
             # flag, it won't be called twice
             if status != None:
-                await self.stop(now=True, cancel=True, event=None)
+                await self.stop(now=True, event=None)
 
         return status
 
@@ -1790,7 +1712,7 @@ class ForwardBaseSpawner(Spawner):
     async def _stop(self):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
 
-    async def stop(self, now=False, cancel=False, event=None, **kwargs):
+    async def stop(self, now=False, event=None, **kwargs):
         if self.already_stopped:
             # We've already sent a request to the outpost.
             # There's no need to do it again.
@@ -1799,43 +1721,12 @@ class ForwardBaseSpawner(Spawner):
         # Prevent multiple requests to the outpost
         self.already_stopped = True
 
-        if hasattr(self.user, 'authenticator') and hasattr(self.user.authenticator, 'refresh_user'):
-            try:
-                await self.user.authenticator.refresh_user(self.user, None, force=True)
-            except TypeError as e:
-                if "unexpected keyword argument 'force'" in str(e):
-                    await self.user.authenticator.refresh_user(self.user, None)
-                else:
-                    raise
-
-        if cancel:
-            self._cancel_wait_event = asyncio.Event()
-            # If self._start is still running we cancel it here
-            cancelling_event = await self.get_cancelling_event()
-            self.events.append(cancelling_event)
-            await self.cancel_start_function()
         try:
             await self._stop(now=now, **kwargs)
         except AnyTimeoutError:
             self.log.exception(f"{self._log_name} - timeout")
         except:
             self.log.exception(f"{self._log_name} - Could not stop")
-        finally:
-            if not event:
-                event = await self.get_stop_event()
-            elif callable(event):
-                event = await maybe_future(event(self))
-            self.events.append(event)
-            await self.wait_for_stop_event()
-
-        # We've implemented a cancel feature, which allows us to call
-        # Spawner.stop(cancel=True) and stop the spawn process.
-        # Used by api_setup_tunnel.py.
-        if cancel:
-            try:
-                await self.cancel()
-            except:
-                self.log.exception(f"{self._log_name} - Start function cancelled")
 
         if self.port_forward_info:
             try:
@@ -1843,41 +1734,3 @@ class ForwardBaseSpawner(Spawner):
                 await gen.with_timeout(timedelta(seconds=10), future)
             except AnyTimeoutError:
                 self.log.exception(f"{self._log_name} - timeout")
-
-    async def cancel_start_function(self):
-        # cancel self._start, if it's running
-        for future in [self._start_future, self._start_future_response]:
-            if future and type(future) is asyncio.Task:
-                if future._state in ["PENDING"]:
-                    try:
-                        future.cancel()
-                    except asyncio.CancelledError:
-                        pass
-                    except:
-                        self.log.exception(
-                            f"{self._log_name} - Unexpected error during cancelling."
-                        )
-
-    async def cancel(self):
-        try:
-            # If this function was called, it was called directly in self.stop
-            # and not via user.stop. So we want to cleanup the user object
-            # as well. It will throw an exception, but we expect the asyncio task
-            # to be cancelled, because we've cancelled it ourself.
-            await self.user.stop(self.name)
-        except asyncio.CancelledError:
-            pass
-        except:
-            self.log.exception(
-                f"{self._log_name} - Unexpected error during cancelling."
-            )
-
-        if type(self._spawn_future) is asyncio.Task:
-            if self._spawn_future._state in ["PENDING"]:
-                try:
-                    self._spawn_future.cancel()
-                except asyncio.CancelledError:
-                    pass
-        if self._cancel_wait_event:
-            self._cancel_wait_event.set()
-
