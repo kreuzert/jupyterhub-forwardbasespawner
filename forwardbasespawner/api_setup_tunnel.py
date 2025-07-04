@@ -1,5 +1,5 @@
+import asyncio
 import datetime
-import inspect
 import json
 
 from jupyterhub.apihandlers import default_handlers
@@ -83,9 +83,20 @@ class SetupTunnelAPIHandler(APIHandler):
                         "event": failed_event,
                     },
                 )
-                stop = spawner.stop(cancel=True, event=failed_event)
-                if inspect.isawaitable(stop):
-                    await stop
+                spawner.last_event = failed_event
+                if spawner.pending:
+                    spawn_future = spawner._spawn_future
+                    if spawn_future:
+                        spawn_future.cancel()
+                    # Give cancel a chance to resolve?
+                    # not sure what we would wait for here,
+                    await asyncio.sleep(1)
+                    await self.stop_single_user(user, server_name)
+                else:
+                    # include notify, so that a server that died is noticed immediately
+                    status = await spawner.poll_and_notify()
+                    if status is None:
+                        await self.stop_single_user(user, server_name)
                 self.set_header("Content-Type", "text/plain")
                 self.set_status(400)
                 return

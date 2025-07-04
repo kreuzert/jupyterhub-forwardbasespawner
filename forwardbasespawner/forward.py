@@ -1702,7 +1702,7 @@ class ForwardBaseSpawner(Spawner):
             # is teared down correctly. Thanks to the "self.already_stopped"
             # flag, it won't be called twice
             if status != None:
-                await self.stop(now=True, event=None)
+                await self.stop(now=True)
 
         return status
 
@@ -1712,7 +1712,7 @@ class ForwardBaseSpawner(Spawner):
     async def _stop(self):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
 
-    async def stop(self, now=False, event=None, **kwargs):
+    async def stop(self, now=False, **kwargs):
         if self.already_stopped:
             # We've already sent a request to the outpost.
             # There's no need to do it again.
