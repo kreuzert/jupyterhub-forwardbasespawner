@@ -1679,7 +1679,7 @@ class ForwardBaseSpawner(Spawner):
                 except:
                     self.log.exception(f"{self._log_name} - Could not stop")
                 try:
-                    self.run_post_stop_hook()
+                    await maybe_future(self.run_post_stop_hook())
                 except:
                     self.log.exception(
                         f"{self._log_name} - Could not run post stop hook"
@@ -1694,7 +1694,7 @@ class ForwardBaseSpawner(Spawner):
                     )
                     self.call_during_startup = False
                     await self.stop()
-                    self.run_post_stop_hook()
+                    await maybe_future(self.run_post_stop_hook())
                     return 0
         else:
             # If the remote running service is no longer running, we
