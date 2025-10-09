@@ -4,15 +4,16 @@ import inspect
 import os
 import string
 import subprocess
+import sys
 import traceback
 import uuid
-import sys
 from datetime import datetime
 from datetime import timedelta
 from functools import lru_cache
 from urllib.parse import urlparse
 
 import escapism
+
 if sys.version_info >= (3, 10):
     from contextlib import aclosing
 else:
@@ -1590,9 +1591,7 @@ class ForwardBaseSpawner(Spawner):
             resp = await self._sub_spawn_future
         except Exception as e:
             status_code = getattr(e, "status_code", 500)
-            reason = getattr(e, "reason", traceback.format_exc()).replace(
-                "\n", "<br>"
-            )
+            reason = getattr(e, "reason", traceback.format_exc()).replace("\n", "<br>")
             log_message = getattr(e, "log_message", "")
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             self.last_event = {
@@ -1648,7 +1647,6 @@ class ForwardBaseSpawner(Spawner):
         self.log.info(f"{self._log_name} - Expect JupyterLab at {ret}")
         return ret
 
-
     async def _start(self):
         raise NotImplementedError("Override in subclass. Must be a coroutine.")
 
@@ -1703,6 +1701,25 @@ class ForwardBaseSpawner(Spawner):
             # flag, it won't be called twice
             if status != None:
                 await self.stop(now=True)
+                if (
+                    not self.last_event
+                    or not self.events
+                    or (len(self.events) > 1 and not self.events[-1].get("failed"))
+                ):
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                    self.last_event = {
+                        "failed": True,
+                        "ready": False,
+                        "progress": 100,
+                        "message": "",
+                        "html_message": f"<details><summary>{now}: JupyterLab start failed with status code {status}.</summary>Check JupyterLab logs for more information, if available.</details>",
+                    }
+                    self.events.append(self.last_event)
+                    if self._stop_pending_event:
+                        self._stop_pending_event.set()
+                self.cancelling_event = {}
+                self._spawn_future.cancel()
+                await self.user.stop(self.name)
 
         return status
 
