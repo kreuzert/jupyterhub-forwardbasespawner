@@ -418,6 +418,24 @@ class ForwardBaseSpawner(Spawner):
         """
     ).tag(config=True)
 
+    pre_stop_hook = Any(
+        default_value=False,
+        help="""
+        Hook which allows to run a function before calling stop.
+
+        Callable function, may be a coroutine.
+        """,
+    ).tag(config=True)
+
+    async def run_pre_stop_hook(self):
+        if self.pre_stop_hook:
+            ret = self.pre_stop_hook(self)
+            if inspect.isawaitable(ret):
+                ret = await ret
+            return ret
+        else:
+            return True
+
     pre_poll_hook = Any(
         default_value=False,
         help="""
@@ -440,7 +458,6 @@ class ForwardBaseSpawner(Spawner):
             ret = self.pre_poll_hook(self)
             if inspect.isawaitable(ret):
                 ret = await ret
-            self.log.debug(f"{self._log_name} - Pre poll hook return: {ret}")
             return ret
         else:
             return True
@@ -1737,7 +1754,10 @@ class ForwardBaseSpawner(Spawner):
 
         # Prevent multiple requests to the outpost
         self.already_stopped = True
-
+        try:
+            await self.run_pre_stop_hook()
+        except:
+            self.log.exception(f"{self._log_name} - Error in pre stop hook")
         try:
             await self._stop(now=now, **kwargs)
         except AnyTimeoutError:
