@@ -1735,7 +1735,8 @@ class ForwardBaseSpawner(Spawner):
                     if self._stop_pending_event:
                         self._stop_pending_event.set()
                 self.cancelling_event = {}
-                self._spawn_future.cancel()
+                if self._spawn_future:
+                    self._spawn_future.cancel()
                 await self.user.stop(self.name)
 
         return status
