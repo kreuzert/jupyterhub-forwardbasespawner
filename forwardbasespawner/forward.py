@@ -1543,13 +1543,13 @@ class ForwardBaseSpawner(Spawner):
 
     def _expand_user_properties(self, template):
         # Make sure username and servername match the restrictions for DNS labels
-        # Note: '-' is not in safe_chars, as it is being used as escape character
-        safe_chars = set(string.ascii_lowercase + string.digits)
+        safe_chars = set(string.ascii_lowercase + string.digits + "-")
 
         raw_servername = self.name or ""
         safe_servername = escapism.escape(
-            raw_servername, safe=safe_chars, escape_char="-"
+            raw_servername, safe=safe_chars, escape_char="%"
         ).lower()
+        safe_servername = safe_servername.replace("%", "-")
 
         hub_namespace = self._namespace_default()
         if hub_namespace == "default":
@@ -1559,8 +1559,9 @@ class ForwardBaseSpawner(Spawner):
             [s if s in safe_chars else "-" for s in self.user.name.lower()]
         )
         safe_username = escapism.escape(
-            self.user.name, safe=safe_chars, escape_char="-"
+            self.user.name, safe=safe_chars, escape_char="%"
         ).lower()
+        safe_username = safe_username.replace("%", "-")
         rendered = template.format(
             userid=self.user.id,
             username=safe_username,
