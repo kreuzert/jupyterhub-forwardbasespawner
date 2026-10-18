@@ -1374,7 +1374,6 @@ class ForwardBaseSpawner(Spawner):
             "metadata": {
                 "labels": labels,
                 "name": self.svc_name,
-                "resourceversion": "v1",
             },
             "spec": {
                 "ports": [
