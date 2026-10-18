@@ -1766,8 +1766,11 @@ class ForwardBaseSpawner(Spawner):
             self.log.exception(f"{self._log_name} - Could not stop")
 
         if self.port_forward_info:
+            # asyncio.wait_for cancels the task on timeout (gen.with_timeout
+            # does NOT, which would leak the removal work plus the k8s/ssh
+            # subprocesses it manages).
+            future = asyncio.ensure_future(self.run_ssh_forward_remove())
             try:
-                future = self.run_ssh_forward_remove()
-                await gen.with_timeout(timedelta(seconds=10), future)
+                await asyncio.wait_for(future, timeout=10)
             except AnyTimeoutError:
                 self.log.exception(f"{self._log_name} - timeout")
