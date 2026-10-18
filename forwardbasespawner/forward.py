@@ -64,7 +64,6 @@ class ForwardBaseSpawner(Spawner):
     #
     # Subclasses' _start() function should return this
     port_forward_info = {}
-    port_forwarded = 0
 
     # Used in api_notifications to check, if the UNICORE notification
     # is for the current start attempt.
