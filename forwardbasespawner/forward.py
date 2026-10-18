@@ -1035,7 +1035,7 @@ class ForwardBaseSpawner(Spawner):
 
         if callable(self.ssh_remote_node):
             ssh_remote_node = await maybe_future(
-                self.ssh_node(self, self.port_forward_info.get("remote", {}))
+                self.ssh_remote_node(self, self.port_forward_info.get("remote", {}))
             )
         else:
             ssh_remote_node = self.port_forward_info.get("remote", {}).get(
