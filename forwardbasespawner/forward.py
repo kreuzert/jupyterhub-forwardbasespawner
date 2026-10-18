@@ -119,7 +119,7 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            from jupyterhub.utils import random_potr
+            from jupyterhub.utils import random_port
             def custom_port(spawner, user_options):
                 if user_options.get("system", "") == "A":
                     return 8080
