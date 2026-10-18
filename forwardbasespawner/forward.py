@@ -195,7 +195,7 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_key(spawner):
+            def ssh_key(spawner, port_forward_info):
                 if spawner.user_options.get("system", "") == "A":
                     return "/mnt/private_keys/a"
                 return "/mnt/private_keys/b"
@@ -217,7 +217,7 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_remote_key(spawner):
+            def ssh_remote_key(spawner, remote_info):
                 if spawner.user_options.get("system", "") == "A":
                     return "/mnt/private_keys/a"
                 return "/mnt/private_keys/b"
@@ -238,7 +238,7 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_username(spawner):
+            def ssh_username(spawner, port_forward_info):
                 if spawner.user_options.get("system", "") == "A":
                     return "jhuboutpost"
                 return "ubuntu"
@@ -259,12 +259,12 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_username(spawner):
+            def ssh_remote_username(spawner, remote_info):
                 if spawner.user_options.get("system", "") == "A":
                     return "jhuboutpost"
                 return "ubuntu"
 
-            c.ForwardBaseSpawner.ssh_remote_username = ssh_username
+            c.ForwardBaseSpawner.ssh_remote_username = ssh_remote_username
 
         """,
     ).tag(config=True)
@@ -281,7 +281,7 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_node(spawner):
+            def ssh_node(spawner, port_forward_info):
                 if spawner.user_options.get("system", "") == "A":
                     return "outpost.namespace.svc"
                 else:
@@ -348,13 +348,13 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_node(spawner):
+            def ssh_remote_node(spawner, remote_info):
                 if spawner.user_options.get("system", "") == "A":
                     return "outpost.namespace.svc"
                 else:
                     return "<public_ip>"
 
-            c.ForwardBaseSpawner.ssh_remote_node = ssh_node
+            c.ForwardBaseSpawner.ssh_remote_node = ssh_remote_node
 
         """,
     ).tag(config=True)
@@ -370,7 +370,7 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_port(spawner):
+            def ssh_port(spawner, port_forward_info):
                 if spawner.user_options.get("system", "") == "A":
                     return 22
                 else:
@@ -392,13 +392,13 @@ class ForwardBaseSpawner(Spawner):
 
         Example::
 
-            def ssh_port(spawner):
+            def ssh_remote_port(spawner, remote_info):
                 if spawner.user_options.get("system", "") == "A":
                     return 22
                 else:
                     return 2222
 
-            c.ForwardBaseSpawner.ssh_remote_port = ssh_port
+            c.ForwardBaseSpawner.ssh_remote_port = ssh_remote_port
 
         """,
     ).tag(config=True)
