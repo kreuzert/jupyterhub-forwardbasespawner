@@ -1378,6 +1378,14 @@ class ForwardBaseSpawner(Spawner):
             raise Exception(
                 f"Could not create remote forward port ({start_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
             )
+        # Register the remote forward so that stop() knows there is a
+        # remote tunnel to tear down (and via load_state, still does
+        # after a JupyterHub restart). Custom forwarders that manage the
+        # stop command themselves can overwrite this handle.
+        self.port_forward_info["remote"] = {
+            "ssh_node": node,
+            "ssh_user": user,
+        }
 
     def _k8s_get_client_core(self):
         """Get python kubernetes API client"""
@@ -1491,6 +1499,28 @@ class ForwardBaseSpawner(Spawner):
                 self.log.warning(
                     f"{self._log_name} - Could not delete port forwarding svc"
                 )
+
+    async def run_ssh_forward_remote_remove(self):
+        """Remove the previously created remote port forward, if any.
+
+        Dispatches the custom remote remove hook if defined, else the
+        default one (ssh <user>@<node> stop). The default no-ops with an
+        info log if no remote forward handle is stored in
+        port_forward_info, so it is safe to call unconditionally.
+        """
+        try:
+            if self.ssh_custom_forward_remote_remove:
+                remote_forward_stop = self.ssh_custom_forward_remote_remove(
+                    self, self.port_forward_info
+                )
+                if inspect.isawaitable(remote_forward_stop):
+                    await remote_forward_stop
+            else:
+                await self.ssh_default_forward_remote_remove()
+        except:
+            self.log.exception(
+                f"{self._log_name} - Could not cancel remote port forwarding"
+            )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1664,6 +1694,12 @@ class ForwardBaseSpawner(Spawner):
         resp = await self.run_update_start_response(resp)
         resp_json = {"service": resp}
 
+        # Remember the remote forward handle (created above), because the
+        # "store" branch below reassigns self.port_forward_info from scratch
+        # and would wipe the "remote" info stop() needs to tear down the
+        # remote forward.
+        remote_handle = self.port_forward_info.get("remote")
+
         """
         There are 3 possible scenarios for remote singleuser servers:
         1. Reachable by JupyterHub (e.g. Outpost service running on same cluster)
@@ -1681,6 +1717,8 @@ class ForwardBaseSpawner(Spawner):
 
             # Store port_forward_info, required for port forward removal
             self.port_forward_info = resp_json
+            if remote_handle:
+                self.port_forward_info["remote"] = remote_handle
             forward_result = await maybe_future(self.run_ssh_forward())
             if forward_result is None:
                 # No service was created as part of the forward setup
@@ -1821,3 +1859,16 @@ class ForwardBaseSpawner(Spawner):
                 await asyncio.wait_for(future, timeout=10)
             except AnyTimeoutError:
                 self.log.exception(f"{self._log_name} - timeout")
+            # Tear down the remote forward (if one was created during
+            # start). Safe to call unconditionally: without a custom
+            # remote remover it resolves the ssh user/node from the
+            # stored "remote" handle, and no-ops with an info log if
+            # there is none.
+            if self.ssh_create_remote_forward or self.ssh_custom_forward_remote:
+                try:
+                    future = asyncio.ensure_future(
+                        self.run_ssh_forward_remote_remove()
+                    )
+                    await asyncio.wait_for(future, timeout=10)
+                except AnyTimeoutError:
+                    self.log.exception(f"{self._log_name} - timeout")
