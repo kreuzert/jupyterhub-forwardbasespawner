@@ -1681,7 +1681,14 @@ class ForwardBaseSpawner(Spawner):
 
             # Store port_forward_info, required for port forward removal
             self.port_forward_info = resp_json
-            svc_name, port = await maybe_future(self.run_ssh_forward())
+            forward_result = await maybe_future(self.run_ssh_forward())
+            if forward_result is None:
+                # No service was created as part of the forward setup
+                # (e.g. svc_create=False or a custom hook returning None),
+                # so fall back to the default address, like in case 3.
+                svc_name, port = self.svc_name, self.port
+            else:
+                svc_name, port = forward_result
             ret = f"{proto}{svc_name}:{port}"
         else:
             if not resp_json.get("service", ""):
