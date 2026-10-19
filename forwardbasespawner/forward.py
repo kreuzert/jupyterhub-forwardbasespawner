@@ -1091,8 +1091,6 @@ class ForwardBaseSpawner(Spawner):
                     ret = await self.ssh_default_svc()
             except Exception as e:
                 try:
-                    # Must be awaited: run_ssh_forward_remove() is a
-                    # coroutine, calling it bare would skip the rollback.
                     await self.run_ssh_forward_remove()
                 except:
                     self.log.exception(
