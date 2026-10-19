@@ -76,10 +76,29 @@ class SpawnEventsAPIHandler(APIHandler):
                 spawn_future = spawner._spawn_future
                 if spawn_future:
                     spawn_future.cancel()
-                # Give cancel a chance to resolve?
-                # not sure what we would wait for here,
-                await asyncio.sleep(1)
-                await self.stop_single_user(user, server_name)
+                    # Wait (up to 1s, same budget as the previous fixed sleep)
+                    # for the cancelled spawn to settle. spawner._spawn_pending
+                    # is cleared by the spawn done-callback (jupyterhub
+                    # handlers/base.py _clear_spawn_future), and
+                    # stop_single_user() raises RuntimeError while
+                    # spawner.pending is set.
+                    loop = asyncio.get_running_loop()
+                    deadline = loop.time() + 1
+                    while not spawn_future.done() and loop.time() < deadline:
+                        await asyncio.sleep(0.05)
+                    if spawn_future.done():
+                        # One more yield so the done-callback runs first.
+                        await asyncio.sleep(0.05)
+                if spawner.pending:
+                    # Did not settle within the budget. Log instead of raising
+                    # a RuntimeError into the request; a normal stop will pick
+                    # it up later.
+                    self.log.warning(
+                        f"{spawner._log_name} - spawn still pending "
+                        f"{spawner.pending!r} after cancel, skipping stop"
+                    )
+                else:
+                    await self.stop_single_user(user, server_name)
             else:
                 # include notify, so that a server that died is noticed immediately
                 status = await spawner.poll_and_notify()
