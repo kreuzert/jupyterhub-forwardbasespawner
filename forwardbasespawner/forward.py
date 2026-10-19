@@ -1630,7 +1630,7 @@ class ForwardBaseSpawner(Spawner):
             try:
                 if self.ssh_custom_forward_remote:
                     port_forward_remote = self.ssh_custom_forward_remote(
-                        self, self.ssh_custom_forward_remote
+                        self, self.port_forward_info
                     )
                     if inspect.isawaitable(port_forward_remote):
                         await port_forward_remote
