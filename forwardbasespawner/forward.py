@@ -1208,18 +1208,48 @@ class ForwardBaseSpawner(Spawner):
             raise e
         return p.returncode, out, err
 
-    def split_service_address(self, service_address):
+    def split_service_address(self, service_address, default_port=None):
+        """Split a service address of the form (http[s]://)host:port.
+
+        Returns a (service_address, port) tuple. Malformed input is not an
+        error: None/empty (no service address known yet) returns
+        ("", default_port), and an address without an explicit port
+        (e.g. "svc.namespace.svc") defaults to default_port.
+        """
+        if not service_address:
+            return "", default_port
         service_address_port = service_address.removeprefix("https://").removeprefix(
             "http://"
         )
-        service_address_short, port = service_address_port.split(":")
-        return service_address_short, port
+        host, separator, port = service_address_port.rpartition(":")
+        if not separator:
+            # No explicit port given (e.g. a k8s service name on its
+            # default port).
+            if default_port is None:
+                self.log.warning(
+                    f"{self._log_name} - Service address {service_address!r} has no port, cannot determine one"
+                )
+            return service_address_port, default_port
+        if not host:
+            self.log.warning(
+                f"{self._log_name} - Malformed service address {service_address!r}, expected host:port"
+            )
+            return "", default_port
+        return host, port
 
     async def ssh_default_forward_remove(self):
         """Default function to remove previously created port forward."""
         service_address, service_port = self.split_service_address(
-            self.port_forward_info.get("service")
+            self.port_forward_info.get("service"), default_port=self.port
         )
+        if not service_address:
+            # No service address was registered (e.g. the singleuser server
+            # never called the SetupTunnel API), so there is nothing to
+            # cancel.
+            self.log.info(
+                f"{self._log_name} - No service address in port_forward_info, nothing to remove"
+            )
+            return
         user, node, cmd = await self.get_forward_cmd()
         cancel_cmd = cmd.copy()
         cancel_cmd.extend(
@@ -1240,6 +1270,16 @@ class ForwardBaseSpawner(Spawner):
         Returns:
           None
         """
+        # The service address must be known before any forwarding is set up
+        # (it is provided by the Outpost service or the SetupTunnel API).
+        service_address, service_port = self.split_service_address(
+            self.port_forward_info.get("service"), default_port=self.port
+        )
+        if not service_address:
+            raise Exception(
+                "Cannot set up port forwarding: no service address in port_forward_info"
+            )
+
         # check if ssh multiplex connection is up
         user, node, cmd = await self.get_forward_cmd()
         check_cmd = cmd.copy()
@@ -1255,7 +1295,7 @@ class ForwardBaseSpawner(Spawner):
             # the success with check_cmd again
             try:
                 returncode, out, err = await self.subprocess_cmd(connect_cmd, timeout=1)
-            except AnyTimeoutError as e:
+            except AnyTimeoutError:
                 returncode, out, err = await self.subprocess_cmd(check_cmd)
 
             if returncode != 0:
@@ -1263,9 +1303,6 @@ class ForwardBaseSpawner(Spawner):
                     f"Could not create ssh connection ({connect_cmd}) (Returncode: {returncode} != 0). Stdout: {out}. Stderr: {err}"
                 )
 
-        service_address, service_port = self.split_service_address(
-            self.port_forward_info.get("service")
-        )
         create_cmd = cmd.copy()
         create_cmd.extend(
             [
@@ -1304,9 +1341,12 @@ class ForwardBaseSpawner(Spawner):
 
     async def ssh_default_forward_remote_remove(self):
         """Default function to remove previously created remote port forward."""
-        service_address, service_port = self.split_service_address(
-            self.port_forward_info.get("service")
-        )
+        if not self.port_forward_info.get("remote"):
+            # No remote forward was set up, so there is nothing to stop.
+            self.log.info(
+                f"{self._log_name} - No remote info in port_forward_info, nothing to remove"
+            )
+            return
         user, node, cmd = await self.get_forward_remote_cmd()
         stop_cmd = cmd.copy()
         stop_cmd.extend([f"{user}@{node}", "stop"])
@@ -1769,8 +1809,8 @@ class ForwardBaseSpawner(Spawner):
             # asyncio.wait_for cancels the task on timeout (gen.with_timeout
             # does NOT, which would leak the removal work plus the k8s/ssh
             # subprocesses it manages).
-            future = asyncio.ensure_future(self.run_ssh_forward_remove())
             try:
+                future = asyncio.ensure_future(self.run_ssh_forward_remove())
                 await asyncio.wait_for(future, timeout=10)
             except AnyTimeoutError:
                 self.log.exception(f"{self._log_name} - timeout")
