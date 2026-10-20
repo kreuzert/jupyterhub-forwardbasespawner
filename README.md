@@ -1,4 +1,4 @@
-[![Documentation Status](https://github.com/kreuzert/jupyterhub-forwardbasespawner/actions/workflows/docs.yaml/badge.svg)](https://kreuzert.github.io/jupyterhub-forwardbasespawner/)
+[![Documentation Status](https://github.com/kreuzert/jupyterhub-forwardbasespawner/actions/workflows/docs.yml/badge.svg)](https://kreuzert.github.io/jupyterhub-forwardbasespawner/)
 
 # ForwardBaseSpawner
 
