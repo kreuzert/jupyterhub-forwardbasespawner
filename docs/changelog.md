@@ -1,4 +1,7 @@
-```{eval-rst}
-.. include:: ../CHANGELOG.md
-   :parser: myst_parser.sphinx_
-```
+---
+title: Changelog
+---
+
+# Changelog
+
+{% include "../CHANGELOG.md" %}
