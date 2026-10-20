@@ -1,0 +1,36 @@
+[project]
+site_name = "ForwardBaseSpawner"
+site_description = "Base class for JupyterHub Spawners that start singleuser notebook servers on a remote system"
+site_author = "Tim Kreuzer"
+copyright = "Copyright (c) 2023, Forschungszentrum Juelich GmbH"
+site_url = "https://kreuzert.github.io/jupyterhub-forwardbasespawner"
+docs_dir = "docs"
+site_dir = "site"
+
+nav = [
+  { "Home" = "index.md" },
+  { "ForwardBaseSpawner" = "spawners/forwardbasespawner.md" },
+  { "API Endpoints" = "apiendpoints.md" },
+  { "Changelog" = "changelog.md" },
+]
+
+[project.theme]
+name = "material"
+repo_url = "https://github.com/kreuzert/jupyterhub-forwardbasespawner"
+repo_name = "kreuzert/jupyterhub-forwardbasespawner"
+
+[project.theme.palette]
+primary = "indigo"
+accent = "indigo"
+
+[project.plugins.mkdocstrings]
+default_handler = "python"
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["."]
+
+[project.plugins.mkdocs-autorefs]
+enabled = true
+
+[project.plugins.include-markdown]
+enabled = true

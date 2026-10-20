@@ -21,7 +21,6 @@ authors = [
 
 dependencies = [
     "escapism",
-    "jinja2",
     "jupyterhub>=5.0.0",
     "traitlets",
     "urllib3",
