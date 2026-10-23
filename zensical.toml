@@ -2,7 +2,7 @@
 site_name = "ForwardBaseSpawner"
 site_description = "Base class for JupyterHub Spawners that start singleuser notebook servers on a remote system"
 site_author = "Tim Kreuzer"
-copyright = "Copyright (c) 2023, Forschungszentrum Juelich GmbH"
+copyright = "Copyright (c) 2026, Forschungszentrum Juelich GmbH"
 site_url = "https://kreuzert.github.io/jupyterhub-forwardbasespawner"
 docs_dir = "docs"
 site_dir = "site"
