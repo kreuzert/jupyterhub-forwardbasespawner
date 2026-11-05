@@ -21,7 +21,7 @@ class SpawnEventsAPIHandler(APIHandler):
         if server_name not in user.spawners:
             # user has no such server
             raise web.HTTPError(404)
-        spawner = user.spawners[server_name]
+        spawner = user.get_or_create_spawner(server_name, server_name)
         data = {
             "events": spawner.events,
             "active": spawner.active,
@@ -52,7 +52,7 @@ class SpawnEventsAPIHandler(APIHandler):
             return
 
         user = self.find_user(user_name)
-        spawner = user.spawners[server_name]
+        spawner = user.get_or_create_spawner(server_name, server_name)
         uuidcode = server_name
 
         # Do not do anything if stop or cancel is already pending
@@ -145,7 +145,7 @@ class SpawnEventsAPIHandler(APIHandler):
                     "event": event.get("html_message", event.get("message", event)),
                 },
             )
-            spawner = user.spawners[server_name]
+            spawner = user.get_or_create_spawner(server_name, server_name)
             if hasattr(spawner, "events") and type(spawner.events) == list:
                 spawner.events.append(event)
             self.set_header("Content-Type", "text/plain")

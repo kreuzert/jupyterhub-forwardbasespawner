@@ -35,7 +35,7 @@ class SetupTunnelAPIHandler(APIHandler):
             return
 
         user = self.find_user(user_name)
-        spawner = user.spawners[server_name]
+        spawner = user.get_or_create_spawner(server_name, server_name)
 
         if spawner._stop_pending:
             self.log.debug(

@@ -25,7 +25,7 @@ class ListServersAPIHandler(APIHandler):
         names = []
         for x in query:
             user = self.find_user(x.user.name)
-            spawner = user.spawners[x.name]
+            spawner = user.get_or_create_spawner(x.name, x.name)
             names.append(f"{x.user_id}_{x.name}_{spawner.start_id}")
         self.set_status(200)
         self.write(json.dumps(names))
